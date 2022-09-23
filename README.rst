@@ -225,7 +225,7 @@ Python classes must use ``PascalCase``:
     class WebsiteExampleCom(App):
         path = "../website"
 
-YAML can use any - these four app definitions are equivalent (so would raise an error)::
+YAML can use any - these four app definitions are equivalent (so would raise an error):
 
 .. code-block:: yaml
 
