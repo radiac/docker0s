@@ -1,0 +1,11 @@
+apps:
+  test_app:
+    type: BaseTestApp
+    test_id: manifest
+    extends: extends_base_first.py
+  other_app:
+    path: other_app
+host:
+  name: localhost
+  port: 2222
+  user: vagrant

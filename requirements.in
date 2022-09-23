@@ -1,0 +1,8 @@
+pip-tools
+
+fabric
+python-dotenv
+requests
+pyyaml
+
+pytest
