@@ -7,12 +7,13 @@ Overview
 
 Docker0s uses docker-compose to manage multiple containerised apps on a single machine.
 
-Think Kubernetes with zero features, but a much simpler config syntax. It provides
-containerised deployments for people with busy lives - it's designed for small
-self-hosted low-maintenance deployments which don't need the complexity of k8s.
-
 Bring together standard docker-compose files across multiple projects in a single simple
-manifest file, written in either Python or YAML, to deploy to a single host.
+manifest file, written in either YAML or Python with pre- and post-deployment hooks, to
+deploy to a single host.
+
+It's designed for small self-hosted low-maintenance deployments which don't need the
+complexity of Kubernetes - think k8s with zero features and a much simpler config
+syntax.
 
 
 Quickstart
@@ -25,7 +26,7 @@ Install::
 
 Put together a manifest in Python as ``manifest.py``:
 
-.. code_block:: python
+.. code-block:: python
 
     from docker0s import App, MountedApp, Host
 
@@ -52,7 +53,7 @@ Put together a manifest in Python as ``manifest.py``:
 
 or in YAML as ``manifest.yml``:
 
-.. code_block:: YAML
+.. code-block:: yaml
 
     apps:
       traefik:
@@ -173,7 +174,9 @@ App types
     Key-value pairs of environment variables for docker-compose. If used with
     ``env_file``, if a key appears in both the value in this field will be used.
 
-  Example YAML::
+  Example YAML:
+
+  .. code-block:: yaml
 
       apps:
         website:
@@ -198,7 +201,9 @@ App types
     Path to the app. If this is a git repository it will be cloned to the remote host,
     otherwise it will be pushed from a local path.
 
-  Example YAML::
+  Example YAML:
+
+  .. code-block:: yaml
 
       apps:
         website:
@@ -215,10 +220,14 @@ in YAML and the command line.
 
 Python classes must use ``PascalCase``:
 
+.. code-block:: python
+
     class WebsiteExampleCom(App):
         path = "../website"
 
-YAML can use any - these four app definitions are equivalent (so would raise an error):
+YAML can use any - these four app definitions are equivalent (so would raise an error)::
+
+.. code-block:: yaml
 
     apps:
       website_example_com:
