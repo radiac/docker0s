@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from docker0s import App, Host
-from docker0s.app.base import BaseApp, app_registry
+from docker0s.app import BaseApp, app_registry
 from docker0s.manifest import Manifest
 from docker0s.path import ManifestPath
 

@@ -38,7 +38,7 @@ class ManifestObject:
 
     @classmethod
     def from_dict(
-        cls: type[ManifestObjectType], name: str, data: dict[str, Any]
+        cls: type[ManifestObjectType], name: str, module: str, data: dict[str, Any]
     ) -> type[ManifestObjectType]:
         """
         Build a concrete subclass of this app using the data in the dict
@@ -47,6 +47,8 @@ class ManifestObject:
         # https://github.com/python/mypy/issues/5865
         class FromDict(cls, name=name):  # type: ignore
             pass
+
+        FromDict.__module__ = module
 
         # Collect annotations
         annotations = get_type_hints(FromDict)

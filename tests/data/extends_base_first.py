@@ -1,4 +1,4 @@
-from docker0s.app.base import BaseApp
+from docker0s.app import BaseApp
 
 
 class TestApp(BaseApp):

@@ -10,7 +10,7 @@ from . import git
 
 
 if TYPE_CHECKING:
-    from .app.base import BaseApp
+    from .app import BaseApp
 
 GIT_SSH_PATTERN = re.compile(
     # url: git@github.com:username/repo
@@ -221,7 +221,7 @@ class AppPath(ManifestPath):
     """
 
     app: type[BaseApp]
-    _relative: str
+    _relative: str | None
 
     def __init__(
         self, path: str | ManifestPath, manifest_dir: Path, app: type[BaseApp]
@@ -242,6 +242,16 @@ class AppPath(ManifestPath):
         return super().__str__()
 
     @property
+    def relative(self) -> str:
+        """
+        Relative path
+        """
+        if self._relative is None:
+            raise ValueError("Not an app:// URL")
+
+        return self._relative
+
+    @property
     def path(self) -> str:
         if not self.is_app:
             return self.original
@@ -249,7 +259,7 @@ class AppPath(ManifestPath):
         app_path = self.app.get_path()
 
         if app_path.is_local:
-            path = Path(app_path.original) / self._relative
+            path = Path(app_path.original) / self.relative
             return str(path)
 
         elif app_path.is_git:
@@ -263,9 +273,9 @@ class AppPath(ManifestPath):
                 file_path = ""
 
             if file_path:
-                new_path = str(Path(file_path) / self._relative)
+                new_path = str(Path(file_path) / self.relative)
             else:
-                new_path = self._relative
+                new_path = self.relative
             return f"{root}#{new_path}"
 
         raise ValueError(f"Unsupported path {self.original}")

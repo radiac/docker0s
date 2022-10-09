@@ -3,7 +3,7 @@ from typing import cast
 
 import pytest
 
-from docker0s.app.base import BaseApp
+from docker0s.app import BaseApp
 from docker0s.path import AppPath, ManifestPath
 
 from ..constants import GITHUB_EXISTS

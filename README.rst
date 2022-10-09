@@ -8,7 +8,7 @@ Overview
 Docker0s uses docker-compose to manage multiple containerised apps on a single machine.
 
 Bring together standard docker-compose files across multiple projects in a single simple
-manifest file, written in either YAML or Python with pre- and post-deployment hooks, to
+manifest file, written in either YAML or Python with pre- and post-operation hooks, to
 deploy to a single host.
 
 It's designed for small self-hosted low-maintenance deployments which don't need the
@@ -43,8 +43,16 @@ Put together a manifest in Python as ``manifest.py``:
             "DOMAIN": "example.radiac.net"
         }
 
-        def post_deploy(self, host: Host):
-            # Perform action after deployment, mixins available
+        # Subclass methods to add your own logic
+        def deploy(self):
+            # Perform action before deployment, eg clean up any previous deployment
+            super().deploy()
+            # Perform action after deployment, eg push additional resources
+
+        def up(self, *services):
+            # Perform action before ``up``, eg report to a log
+            super().up(*services)
+            # Perform action after ``up``, eg wait and perform a test
 
     class Vagrant(Host):
         name = "vagrant"
@@ -82,7 +90,7 @@ For example::
 Commands
 ========
 
-``docker0s deploy``:
+``docker0s deploy [<app>[.<service>]]``:
   Deploy resources to the host
 
 ``docker0s up [<app>[.<service>]]``:
@@ -198,8 +206,11 @@ App types
   Takes the same arguments as an ``App``, with the following differences:
 
   ``path``
-    Path to the app. If this is a git repository it will be cloned to the remote host,
-    otherwise it will be pushed from a local path.
+    Path to the app. This must be a git repository.
+
+  ``compose``
+    Path to the app's docker compose file. This must be an ``app://`` path within the
+    repository.
 
   Example YAML:
 
@@ -263,3 +274,22 @@ can use these values, as well as:
 * relative to the app's path with ``app://``, eg if ``path = "../../apps/traefik"``
   then if ``extends = "app://docker0s.py"`` it will look for the base manifest at
   ``../../apps/traefik/docker0s.py``
+
+
+Deployment
+==========
+
+Default deployment structure:
+
+    /home/user/
+      apps/
+        app_name/
+          service_name/
+            docker-compose.yml
+            env
+        mounted_app_with_store/
+          service_name/
+            repo/
+              docker-compose.yml
+            store/
+            env

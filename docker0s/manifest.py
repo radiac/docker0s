@@ -10,8 +10,7 @@ from inspect import isclass
 
 import yaml
 
-from .app import App, app_registry
-from .app.base import BaseApp
+from .app import App, BaseApp, app_registry
 from .app.names import normalise_name
 from .host import Host
 from .path import ManifestPath
@@ -27,6 +26,9 @@ class Manifest:
         self.path = path
         self.apps: list[type[BaseApp]] = []
         self.app_lookup: dict[str, type[BaseApp]] = {}
+
+    def __str__(self) -> str:
+        return str(self.path)
 
     def add_app(self, app: type[BaseApp]) -> None:
         self.apps.append(app)
@@ -143,13 +145,46 @@ class Manifest:
                 )
 
             # Build app class and add to manifest
-            app_cls: type[BaseApp] = app_base_cls.from_dict(name=name, data=app_raw)
-            setattr(app_cls, "__module__", module.__name__)
+            app_cls: type[BaseApp] = app_base_cls.from_dict(
+                name=name, module=module.__name__, data=app_raw
+            )
             setattr(module, name, app_cls)
             manifest.add_app(app_cls)
 
         # Host
         if host_raw:
-            manifest.host = Host.from_dict(name="ImportedHost", data=host_raw)
+            manifest.host = Host.from_dict(
+                name="ImportedHost", module=module.__name__, data=host_raw
+            )
 
         return manifest
+
+    def init_apps(self, *app_names: str) -> list[BaseApp]:
+        """
+        Given one or more names of apps, find them in the registry and initialise them
+        with the manifest host
+        """
+        # Prepare the host
+        if not self.host:
+            raise ValueError("Cannot initialise a manifest that has no host")
+        # Per-exec host options can be added here later
+        host = self.host()
+
+        # Find app classes
+        app_classes: list[type[BaseApp]]
+        if not app_names:
+            app_classes = self.apps
+        else:
+            app_classes = []
+            for app_name in app_names:
+                app_cls: type[BaseApp] | None = self.get_app(app_name)
+                if app_cls is None:
+                    raise ValueError(f"Unknown app name {app_name}")
+                app_classes.append(app_cls)
+
+        # Initialise the apps
+        apps: list[BaseApp] = []
+        for app_cls in app_classes:
+            apps.append(app_cls(host=host))
+
+        return apps

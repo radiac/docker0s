@@ -23,3 +23,19 @@ def read_env(*paths: ManifestPath, **values: str | int) -> dict[str, str | int |
     env.update(values)
 
     return env
+
+
+def dump_env(env: dict[str, str | int | None]) -> str:
+    """
+    Convert an env dict into a multi-line string
+    """
+    lines = []
+    for key, val in env.items():
+        if val is None:
+            lines.append(key)
+        elif isinstance(val, int):
+            lines.append(f"{key}={val}")
+        else:
+            escaped = val.replace('"', r"\"")
+            lines.append(f'{key}="{escaped}"')
+    return "\n".join(lines)

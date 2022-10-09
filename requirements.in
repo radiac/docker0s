@@ -1,8 +1,7 @@
 pip-tools
 
+click
 fabric
 python-dotenv
-requests
 pyyaml
 
-pytest

@@ -1,4 +1,4 @@
-from docker0s.env import read_env
+from docker0s.env import dump_env, read_env
 from docker0s.path import ManifestPath
 
 
@@ -14,7 +14,7 @@ FOUR=4
 """
 
 
-def test_paths_values_merged(tmp_path):
+def test_read__paths_values__merged(tmp_path):
     file1 = tmp_path / "file1.env"
     file1.write_text(FILE1)
     file2 = tmp_path / "file2.env"
@@ -31,3 +31,27 @@ def test_paths_values_merged(tmp_path):
         "THREE": "three",
         "FOUR": "four",
     }
+
+
+def test_dump__env_to_str():
+    dumped = dump_env(
+        {
+            "ONE": "one",
+            "TWO": 2,
+            "THREE": """three
+is
+multiline""",
+            "FOUR": None,
+            "FIVE": "five",
+        }
+    )
+    assert (
+        dumped
+        == """ONE="one"
+TWO=2
+THREE="three
+is
+multiline"
+FOUR
+FIVE="five\""""
+    )

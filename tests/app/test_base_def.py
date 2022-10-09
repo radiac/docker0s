@@ -5,7 +5,7 @@ app collects and processes its attributes.
 
 from pathlib import Path
 
-from docker0s.app.base import BaseApp
+from docker0s.app import BaseApp
 from docker0s.path import AppPath, ManifestPath
 
 
@@ -119,6 +119,7 @@ def test_env__dict_only__returned():
 
     class TestApp(BaseApp):
         env = env_data
+        set_project_name = False
 
     assert TestApp.get_env_data() == env_data
 
@@ -126,6 +127,7 @@ def test_env__dict_only__returned():
 def test_env__file_only__loaded():
     class TestApp(BaseApp):
         env_file = "../data/first.env"
+        set_project_name = False
 
     assert TestApp.get_env_data() == {
         "key1": "first1",
@@ -137,6 +139,7 @@ def test_env__file_only__loaded():
 def test_env__two_files__merged_in_order():
     class TestApp(BaseApp):
         env_file = ["../data/first.env", "../data/second.env"]
+        set_project_name = False
 
     assert TestApp.get_env_data() == {
         "key1": "second1",
@@ -153,8 +156,27 @@ def test_env__two_files_and_dict__merged_in_order():
             "key3": "data3",
             "key5": "data5",
         }
+        set_project_name = False
 
     assert TestApp.get_env_data() == {
+        "key1": "second1",
+        "key2": "first2",
+        "key3": "data3",
+        "key4": "second4",
+        "key5": "data5",
+    }
+
+
+def test_env__data_and_set_project_name__merged_in_order_with_project_name():
+    class TestApp(BaseApp):
+        env_file = ["../data/first.env", "../data/second.env"]
+        env = {
+            "key3": "data3",
+            "key5": "data5",
+        }
+
+    assert TestApp.get_env_data() == {
+        "COMPOSE_PROJECT_NAME": "test_app",
         "key1": "second1",
         "key2": "first2",
         "key3": "data3",

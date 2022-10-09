@@ -17,3 +17,15 @@ def normalise_name(name: str):
 
     # Remove snake and kebab joins, title everything and remove spaces
     return name.replace("_", " ").replace("-", " ").title().replace(" ", "")
+
+
+def pascal_to_snake(name: str):
+    """
+    Convert a PascalCase name to snake_case, for use in Docker containers
+
+    Assumed to have come from a normalised_name so no sanitation required
+    """
+    # Add a _ before each capital and remove the first
+    name = word_pattern.sub(r"_\1", name).lstrip("_")
+
+    return name.lower()
