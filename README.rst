@@ -2,10 +2,20 @@
 docker0s
 ========
 
-Overview
-========
-
 Docker0s uses docker-compose to manage multiple containerised apps on a single host.
+
+.. image:: https://img.shields.io/pypi/v/docker0s.svg
+    :target: https://pypi.org/project/docker0s/
+    :alt: PyPI
+
+.. image:: https://github.com/radiac/docker0s/actions/workflows/ci.yml/badge.svg
+    :target: https://github.com/radiac/docker0s/actions/workflows/ci.yml
+    :alt: Tests
+
+.. image:: https://codecov.io/gh/radiac/docker0s/branch/main/graph/badge.svg?token=BCNM45T6GI
+    :target: https://codecov.io/gh/radiac/docker0s
+    :alt: Test coverage
+
 
 Bring together standard docker-compose files across multiple projects in a single simple
 manifest file, written in either YAML or Python with pre- and post-operation hooks, to
