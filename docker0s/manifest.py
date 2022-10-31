@@ -37,19 +37,27 @@ class Manifest:
     def get_app(self, name: str) -> type[BaseApp] | None:
         return self.app_lookup.get(name)
 
-    def prepare(self):
+    def prepare(self, history: list[ManifestPath]):
         """
         Prepare apps and host for use
 
         * Load base manifests for any apps which define an ``extends``
         """
         for app in self.apps:
-            app.apply_base_manifest()
+            app.apply_base_manifest(history=history)
 
     @classmethod
-    def load(cls, path: ManifestPath) -> Manifest:
+    def load(
+        cls, path: ManifestPath, history: list[ManifestPath] | None = None
+    ) -> Manifest:
         if not path.exists():
             raise ValueError(f"Cannot load {path} - file not found")
+
+        if history is None:
+            history = []
+        if path in history:
+            raise ValueError(f"Cannot load {path} - recursive extends detected")
+        history.append(path)
 
         # Load manifest
         if path.filetype == ".py":
@@ -59,7 +67,7 @@ class Manifest:
         else:
             raise ValueError(f"Manifest {path} filetype invalid - must be .yml or .py")
 
-        manifest.prepare()
+        manifest.prepare(history)
         return manifest
 
     @classmethod
@@ -98,11 +106,17 @@ class Manifest:
         apps_raw = data.pop("apps", [])
         host_raw = data.pop("host", None)
         if len(data) > 0:
-            raise ValueError(f"Unexpected root elements: {', '.join(data.keys())}")
+            raise ValueError(
+                f"Error loading {path}: unexpected root elements {', '.join(data.keys())}"
+            )
         if not isinstance(apps_raw, dict):
-            raise ValueError(f"Expecting root apps definition, found {type(apps_raw)}")
-        if not isinstance(host_raw, dict):
-            raise ValueError(f"Expecting root host definition, found {type(host_raw)}")
+            raise ValueError(
+                f"Error loading {path}: expecting root apps definition, found {type(apps_raw)}"
+            )
+        if host_raw and not isinstance(host_raw, dict):
+            raise ValueError(
+                f"Error loading {path}: expecting root host definition, found {type(host_raw)}"
+            )
 
         # Create module and start manifest
         module_spec = ModuleSpec(
@@ -119,7 +133,7 @@ class Manifest:
         for app_name, app_raw in apps_raw.items():
             if not isinstance(app_raw, dict):
                 raise ValueError(
-                    f"Expecting app definition for {app_name}, found {type(app_raw)}"
+                    f"Error loading {path}: expecting app definition for {app_name}, found {type(app_raw)}"
                 )
 
             # Get app class
@@ -134,14 +148,14 @@ class Manifest:
 
             # Update path
             if "path" not in app_raw:
-                app_raw["path"] = ManifestPath("", manifest_dir=local_path / "..")
+                app_raw["path"] = str(local_path / "..")
 
             # YAML supports snake case names because it looks nicer.
             # Convert to PascalCase
             name = normalise_name(app_name)
             if manifest.get_app(name):
                 raise ValueError(
-                    f"Normalised name collision: {app_name} and {name} are equivalent"
+                    f"Error loading {path}: normalised name collision: {app_name} and {name} are equivalent"
                 )
 
             # Build app class and add to manifest

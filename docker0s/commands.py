@@ -49,7 +49,7 @@ class Target:
     app: str
     service: str | None
 
-    def __init__(self, app: str, service: str | None):
+    def __init__(self, app: str, service: str | None = None):
         # Normalise app name and ensure the target string is valid
         if not app:
             app = ""
@@ -58,6 +58,7 @@ class Target:
         if not app_norm and service:
             raise click.UsageError(f"Invalid target .{service} - app missing")
         self.app = app_norm
+        self.service = service
 
     def __str__(self) -> str:
         if self.service:
@@ -86,47 +87,6 @@ class TargetParamType(click.ParamType):
         return Target(app=app_name, service=service_name)
 
 
-TARGET_TYPE = TargetParamType()
-
-
-@cli.command()
-@with_manifest
-def ls(manifest: Manifest):
-    """
-    List all apps:
-        docker0s ls
-    """
-    print(f"{manifest}")
-    if manifest.host:
-        print(f"Host: {manifest.host()}")
-    print("Apps:")
-    app: type[BaseApp]
-    for app in manifest.apps:
-        print(f"  {app.get_name()}")
-
-
-@cli.command()
-@with_manifest
-@click.argument("apps", type=str, required=False, nargs=-1)
-@click.option("--all", "-a", "all_flag", is_flag=True)
-def deploy(manifest: Manifest, apps: tuple[str], all_flag: bool = False):
-    """
-    Deploy one or more apps:
-        docker0s deploy myapp
-        docker0s deploy traefik website
-
-    Deploy all apps:
-        docker0s deploy --all
-    """
-    if not apps and not all_flag:
-        raise click.UsageError("Must specify --all or one or more apps")
-
-    safe_apps = (normalise_name(app_name) for app_name in apps)
-    bound_apps = manifest.init_apps(*safe_apps)
-    for app in bound_apps:
-        app.deploy()
-
-
 class TargetManager:
     manifest: Manifest
     targets = tuple[Target]
@@ -134,7 +94,7 @@ class TargetManager:
     app_lookup: dict[str, BaseApp]
     service_lookup: dict[BaseApp, list[str]]
 
-    def __init__(self, manifest: Manifest, targets: tuple[Target]):
+    def __init__(self, manifest: Manifest, targets: tuple[Target, ...]):
         self.manifest = manifest
         self.targets = targets
 
@@ -155,20 +115,64 @@ class TargetManager:
                     )
             else:
                 self.service_lookup[bound_app] = []
+
             if target.service is None:
                 continue
             self.service_lookup[bound_app].append(target.service)
 
     def get_app_services(self):
         for app in self.apps:
-            yield (app, self.service_lookup[app])
+            yield (app, self.service_lookup.get(app, []))
+
+
+TARGET_TYPE = TargetParamType()
+
+
+@cli.command()
+@with_manifest
+def ls(manifest: Manifest):
+    """
+    List all apps
+
+    Usage:
+        docker0s ls
+    """
+    print(f"{manifest}")
+    if manifest.host:
+        print(f"Host: {manifest.host()}")
+    print("Apps:")
+    app: type[BaseApp]
+    for app in manifest.apps:
+        print(f"  {app.get_name()}")
+
+
+@cli.command()
+@with_manifest
+@click.argument("apps", type=str, required=False, nargs=-1)
+@click.option("--all", "-a", "all_flag", is_flag=True)
+def deploy(manifest: Manifest, apps: tuple[str], all_flag: bool = False):
+    """
+    Deploy one or more apps
+
+    Usage:
+        docker0s deploy myapp
+        docker0s deploy traefik website
+        docker0s deploy --all
+    """
+    if not apps and not all_flag:
+        raise click.UsageError("Must specify --all or one or more apps")
+
+    safe_apps = (normalise_name(app_name) for app_name in apps)
+    bound_apps = manifest.init_apps(*safe_apps)
+    for app in bound_apps:
+        app.deploy()
 
 
 @cli.command()
 @with_manifest
 @click.argument("targets", type=TARGET_TYPE, required=False, nargs=-1)
 @click.option("--all", "-a", "all_flag", is_flag=True)
-def up(manifest: Manifest, targets: tuple[Target], all_flag: bool = False):
+def up(manifest: Manifest, targets: tuple[Target, ...], all_flag: bool = False):
     """
     Bring up all containers for one or more apps or services:
         docker0s up myapp
@@ -189,7 +193,7 @@ def up(manifest: Manifest, targets: tuple[Target], all_flag: bool = False):
 @with_manifest
 @click.argument("targets", type=TARGET_TYPE, required=False, nargs=-1)
 @click.option("--all", "-a", "all_flag", is_flag=True)
-def down(manifest: Manifest, targets: tuple[Target], all_flag: bool = False):
+def down(manifest: Manifest, targets: tuple[Target, ...], all_flag: bool = False):
     if not targets and not all_flag:
         raise click.UsageError("Must specify --all or one or more targets")
 
@@ -202,7 +206,7 @@ def down(manifest: Manifest, targets: tuple[Target], all_flag: bool = False):
 @with_manifest
 @click.argument("targets", type=TARGET_TYPE, required=False, nargs=-1)
 @click.option("--all", "-a", "all_flag", is_flag=True)
-def restart(manifest: Manifest, targets: tuple[Target], all_flag: bool = False):
+def restart(manifest: Manifest, targets: tuple[Target, ...], all_flag: bool = False):
     if not targets and not all_flag:
         raise click.UsageError("Must specify --all or one or more targets")
 

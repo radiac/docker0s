@@ -13,3 +13,6 @@ FILENAME_ENV = getenv("DOCKER0S_ENV_FILENAME", "env")
 
 #: Remote filename for compose files (some App class may override)
 FILENAME_COMPOSE = getenv("DOCKER0S_COMPOSE_FILENAME", "docker-compose.yml")
+
+#: Remote dir to hold assets
+DIR_ASSETS = getenv("DOCKER0S_DIR_ASSETS", "assets")

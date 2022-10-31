@@ -183,3 +183,28 @@ def test_env__data_and_set_project_name__merged_in_order_with_project_name():
         "key4": "second4",
         "key5": "data5",
     }
+
+
+def test_env__two_files_and_two_dicts_inherited_and_set_project_name__merged_in_order():
+    class ParentApp(BaseApp):
+        env_file = "../data/first.env"
+        env = {
+            "key1": "parent1",
+            "key3": "parent3",
+            "key5": "parent5",
+        }
+
+    class ChildApp(ParentApp):
+        env_file = "../data/second.env"
+        env = {"key3": "child3"}
+
+    # Value first comes from parent file, second comes from child file
+    # Child env_file overrides parent env
+    assert ChildApp.get_env_data() == {
+        "COMPOSE_PROJECT_NAME": "child_app",
+        "key1": "second1",
+        "key2": "first2",
+        "key3": "child3",
+        "key4": "second4",
+        "key5": "parent5",
+    }

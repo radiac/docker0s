@@ -8,7 +8,7 @@ from ..env import dump_env, read_env
 from ..host import Host
 from ..manifest_object import ManifestObject
 from ..path import AppPath, ManifestPath
-from ..settings import FILENAME_COMPOSE, FILENAME_ENV
+from ..settings import DIR_ASSETS, FILENAME_COMPOSE, FILENAME_ENV
 from .names import pascal_to_snake
 
 
@@ -21,19 +21,24 @@ class BaseApp(ManifestObject, abstract=True):
     #: For access see ``.get_path``
     #:
     #: Default: same dir as manifest
-    path: str | ManifestPath = ""
+    path: str = ""
 
-    #: Path to a base docker0s manifest for this app. This must define a single app with
-    #: the same name, and cannot define a host.
+    #: Path to a base docker0s manifest for this app.
+    #:
+    #: If the path ends ``::<name>`` it will look for an app definition with that name,
+    #: eg ``app://bases.py::Store``. Otherwise it will look for an app with the same
+    #: name as this.
+    #:
+    #: The base manifest must not define a host.
     #:
     #: This referenced manifest will will act as the base manifest. That in turn can
     #: reference an additional base manifest.
     #:
     #: Default: ``app://docker0s.py``, then ``app://docker0s.yml``
-    extends: str | AppPath | None = None
+    extends: str | None = None
 
     # Defaults for ``extends`` - first found will be used
-    default_extends: list[str | AppPath] = [
+    default_extends: list[str] = [
         "app://docker0s.py",
         "app://docker0s.yml",
     ]
@@ -44,14 +49,14 @@ class BaseApp(ManifestObject, abstract=True):
     #: For access see ``.get_compose``
     #:
     #: Default: ``app://docker-compose.yml``
-    compose: str | AppPath = "app://docker-compose.yml"
+    compose: str = "app://docker-compose.yml"
 
     #: File containing environment variables for docker-compose
     #:
     #: Path to an env file, or a list of paths
     #:
     #: For access see ``.get_env_data``
-    env_file: str | AppPath | list[str | AppPath] | None = None
+    env_file: str | list[str] | None = None
 
     #: Environment variables for docker-compose
     #:
@@ -139,21 +144,21 @@ class BaseApp(ManifestObject, abstract=True):
         """
         Find the path to the base manifest if one exists, otherwise return None
         """
-        # Find paths to seek
-        extends: list[AppPath]
-        if cls.extends:
-            extends = [cls._mk_app_path(cls.extends)]
-        else:
-            extends = [cls._mk_app_path(path) for path in cls.default_extends]
+        if not cls.extends:
+            return None
 
-        # Return the first which exists
-        for path in extends:
-            if path.exists():
-                return path
+        base_path = cls.extends
+        if "::" in base_path:
+            base_path = base_path.split("::", 1)[0]
+
+        extends_path = cls._mk_app_path(base_path)
+        if extends_path.exists():
+            return extends_path
+
         return None
 
     @classmethod
-    def apply_base_manifest(cls):
+    def apply_base_manifest(cls, history: list[ManifestPath] | None = None):
         """
         If a base manifest can be found by _get_base_manifest, load it and look for a
         BaseApp subclass with the same name as this. If found, add it to the base
@@ -170,10 +175,15 @@ class BaseApp(ManifestObject, abstract=True):
 
         from ..manifest import Manifest
 
-        base_manifest = Manifest.load(path)
+        base_manifest = Manifest.load(path, history)
         if base_manifest.host is not None:
             raise ValueError("A base manifest cannot define a host")
-        base_app = base_manifest.get_app(cls.get_name())
+
+        base_name = cls.get_name()
+        if cls.extends and "::" in cls.extends:
+            base_name = cls.extends.split("::", 1)[1]
+
+        base_app = base_manifest.get_app(base_name)
         if base_app is None:
             raise ValueError(
                 f"Base manifest {path} does not define an app called {cls.get_name()}"
@@ -195,23 +205,34 @@ class BaseApp(ManifestObject, abstract=True):
         Load env files in order (for key conflicts last wins), and then merge in the env
         dict, if defined
         """
-        # Build list of files
-        raw_env_files: list[str | AppPath] = []
-        if cls.env_file is not None:
-            if isinstance(cls.env_file, (tuple, list)):
-                raw_env_files = cls.env_file
-            else:
-                raw_env_files = [cls.env_file]
-        env_files: list[AppPath] = [
-            cls._mk_app_path(env_file) for env_file in raw_env_files
-        ]
 
-        # Prepare dict
-        env_dict = cls.env
-        if env_dict is None:
-            env_dict = {}
+        def collect_without_inheritance(mro_cls):
+            # Build list of files
+            raw_env_files: list[str] = []
 
-        env: dict[str, str | int | None] = read_env(*env_files, **env_dict)
+            # Get attributes directly from the class without inheritance
+            env_file: str | list[str] = mro_cls.__dict__.get("env_file", None)
+            env_dict: dict[str, (str | int)] = mro_cls.__dict__.get("env", None)
+
+            if env_file is not None:
+                if isinstance(env_file, (tuple, list)):
+                    raw_env_files = env_file
+                else:
+                    raw_env_files = [env_file]
+            env_files: list[AppPath] = [
+                cls._mk_app_path(env_file) for env_file in raw_env_files
+            ]
+
+            # Prepare dict
+            if env_dict is None:
+                env_dict = {}
+
+            env: dict[str, str | int | None] = read_env(*env_files, **env_dict)
+            return env
+
+        env = {}
+        for mro_cls in reversed(cls.mro()):
+            env.update(collect_without_inheritance(mro_cls))
 
         if cls.set_project_name and "COMPOSE_PROJECT_NAME" not in env:
             env["COMPOSE_PROJECT_NAME"] = cls.get_docker_name()
@@ -238,23 +259,34 @@ class BaseApp(ManifestObject, abstract=True):
         """
         return self.remote_path / FILENAME_ENV
 
+    @property
+    def remote_assets(self) -> PosixPath:
+        """
+        A PosixPath for the remote assets dir
+        """
+        return self.remote_path / DIR_ASSETS
+
+    def get_host_env_data(self) -> dict[str, str | int | None]:
+        env_data = self.get_env_data()
+        env_data.update(
+            {
+                "ENV_FILE": str(self.remote_env),
+                "ASSETS": str(self.remote_assets),
+            }
+        )
+        return env_data
+
     def deploy(self):
         """
-        Deploy the docker-compose and env files for this app
+        Deploy the env file for this app
         """
         print(f"Deploying {self} to {self.host}")
         self.write_env_to_host()
-        self.push_compose_to_host()
 
     def write_env_to_host(self):
         env_dict = self.get_env_data()
         env_str = dump_env(env_dict)
         self.host.write(self.remote_env, env_str)
-
-    def push_compose_to_host(self):
-        compose_local: Path = self.get_compose().absolute
-        compose_remote: PosixPath = self.remote_compose
-        self.host.push(compose_local, compose_remote)
 
     def call_compose(self, cmd: str, args: dict[str, Any] | None = None):
         """

@@ -56,8 +56,6 @@ class ManifestObject:
         for key, value in data.items():
             if key not in annotations:
                 raise ValueError(f"Unexpected attribute {key} for {cls}")
-            if not isinstance(value, annotations[key]):
-                raise TypeError(f"Unexpected value for {key}: {value}")
 
             setattr(FromDict, key, value)
 

@@ -3,7 +3,7 @@ Test the operations of app definitions - the methods which deploy and call
 docker-compose on the host
 """
 
-from pathlib import Path, PosixPath
+from pathlib import PosixPath
 
 import pytest
 
@@ -42,12 +42,6 @@ def test_mocked_app__deploy(mock_fabric, base_app):
             "put",
             mocked.StringIO('COMPOSE_PROJECT_NAME="sample_app"'),
             "apps/sample_app/env",
-        ),
-        ("run", "mkdir -p apps/sample_app", None),
-        (
-            "put",
-            str(Path("tests/app/docker-compose.yml").resolve()),
-            "apps/sample_app/docker-compose.yml",
         ),
     ]
 

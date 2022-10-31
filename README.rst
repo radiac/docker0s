@@ -5,7 +5,7 @@ docker0s
 Overview
 ========
 
-Docker0s uses docker-compose to manage multiple containerised apps on a single machine.
+Docker0s uses docker-compose to manage multiple containerised apps on a single host.
 
 Bring together standard docker-compose files across multiple projects in a single simple
 manifest file, written in either YAML or Python with pre- and post-operation hooks, to
@@ -160,27 +160,34 @@ App types
     A base manifest:
 
     * uses the same syntax
-    * must define an app with the same name as the one extending it - see "App naming"
-      below
     * can define multiple apps
     * must not define a host
 
-    Default: ``app://docker0s.py``, then ``app://docker0s.yml``
+    This value can be one of two patterns:
+
+    * ``path/to/manifest.yml`` or ``path/to/manifest.py`` - this app will extend using
+      the app defined with the same name - see "App naming" below
+    * ``path/to/manifest.yml::AppName`` or ``path/to/manifest.py::AppName`` - this app
+      will extend using the app defined with the name ``AppName``.
+
+    Default: ``None``
 
   ``compose``
     Path to the app's docker compose file.
 
     Default: ``app://docker-compose.yml``
 
+  ``assets``:
+    Path or list of paths to assets which should be uploaded into an ``assets`` dir next
+    to the docker-compose. Must be ``app://`` paths.
+
   ``env_file``
     Path or list of paths to files containing environment variables for docker-compose.
-
-    If more than one file is specified, files are loaded in order. If a key appears in
-    more than one file, the last value loaded will be used.
+    See "Environment variables" below for details.
 
   ``env``
-    Key-value pairs of environment variables for docker-compose. If used with
-    ``env_file``, if a key appears in both the value in this field will be used.
+    Key-value pairs of environment variables for docker-compose.
+    See "Environment variables" below for details.
 
   Example YAML:
 
@@ -275,11 +282,40 @@ can use these values, as well as:
   then if ``extends = "app://docker0s.py"`` it will look for the base manifest at
   ``../../apps/traefik/docker0s.py``
 
+For security, when using a remote manifest from a third party git repository, we
+recommend performing a full audit of what you are going to deploy, and then pinning to
+that specific commit.
+
+
+Environment variables
+---------------------
+
+Environment variables for the docker-compose can be defined as one or more env files, as
+a dict within the manifest, or both.
+
+If more than one ``env_file`` is specified, files are loaded in order. If a key appears
+in more than one file, the last value loaded will be used.
+
+If a key appears in both the ``env`` dict and an ``env_file``, the value in this field
+will be used.
+
+Environment variables are evaluated before inheritance, meaning an env file key in a
+child manifest can override an env dict key in a parent. Precedence order, with winner
+first:
+
+#. Child env dict
+#. Child env file
+#. Parent env dict
+#. Parent env file
+
+Environment variables are merged and written to an env file on the server for
+docker-compose to use.
+
 
 Deployment
 ==========
 
-Default deployment structure:
+Default deployment structure::
 
     /home/user/
       apps/

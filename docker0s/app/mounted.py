@@ -20,10 +20,10 @@ class MountedApp(BaseApp, abstract=True):
     # Redefine attributes for the benefit of docs
 
     #: Path to the directory containing the app. Must be a ``git+`` repository URL
-    path: str | ManifestPath = ""
+    path: str = ""
 
     #: Filename for docker-compose definition. Must be an ``app://`` repository URL
-    compose: str | AppPath = BaseApp.compose
+    compose: str = BaseApp.compose
 
     @classmethod
     def get_path(cls) -> ManifestPath:
@@ -58,6 +58,12 @@ class MountedApp(BaseApp, abstract=True):
     def push_compose_to_host(self):
         """
         Compose is within the git repository, nothing to push
+        """
+        return
+
+    def push_assets_to_host(self):
+        """
+        Assets are within the git repository, nothing to push
         """
         return
 
