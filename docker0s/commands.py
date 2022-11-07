@@ -23,10 +23,10 @@ def cli(ctx, manifest: str | None = None):
 
     else:
         path = Path.cwd()
-        if (path / "manifest.py").exists():
-            manifest_file = "manifest.py"
-        elif (path / "manifest.yml").exists():
-            manifest_file = "manifest.yml"
+        if (path / "d0s-manifest.py").exists():
+            manifest_file = "d0s-manifest.py"
+        elif (path / "d0s-manifest.yml").exists():
+            manifest_file = "d0s-manifest.yml"
         else:
             raise click.ClickException("Manifest not found")
 
@@ -217,13 +217,26 @@ def restart(manifest: Manifest, targets: tuple[Target, ...], all_flag: bool = Fa
 
 @cli.command()
 @with_manifest
-@click.argument("target", type=str)
-@click.argument("command")
+@click.argument("target", type=Target)
+@click.argument("command", type=str)
 def exec(manifest: Manifest, target: Target, command: str):
     if not target.service:
         raise click.UsageError("Must specify an app.service target")
     app = manifest.init_apps(target.app)[0]
     app.exec(service=target.service, command=command)
+
+
+@cli.command()
+@with_manifest
+@click.argument("target", type=Target)
+@click.argument("command", type=str)
+@click.argument("arguments", nargs=-1, type=str)
+def cmd(manifest: Manifest, target: Target, command: str, arguments: list[str]):
+    if target.service:
+        raise click.UsageError("Must specify an app target, not an app.service")
+    app = manifest.init_apps(target.app)[0]
+    cmd_fn = app.get_command(command)
+    cmd_fn(*arguments)
 
 
 def invoke():

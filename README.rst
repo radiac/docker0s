@@ -25,6 +25,11 @@ It's designed for small self-hosted low-maintenance deployments which don't need
 complexity of Kubernetes - think k8s with zero features and a much simpler config
 syntax.
 
+There is also a collection of app definitions at `docker0s-manifests`_, with examples
+for how to use them to quickly deploy them to your host.
+
+.. _docker0s-manifests: https://github.com/radiac/docker0s-manifests
+
 
 Quickstart
 ==========
@@ -34,17 +39,31 @@ Install::
     pip install docker0s
 
 
-Put together a manifest in Python as ``manifest.py``:
+Put together a manifest in YAML as ``d0s-manifest.yml``:
+
+.. code-block:: yaml
+
+    apps:
+      traefik:
+        path: git+https://github.com/radiac/docker0s-manifests.git@main#traefik
+        env_file: traefik.env
+      mail:
+        path: ../apps/mail
+      website:
+        type: MountedApp
+        path: "git+ssh://git@github.com:radiac/example.com.git@main"
+        env:
+          DOMAIN: example.radiac.net
+    host:
+      name: example.radiac.net
+
+
+or in Python as ``d0s-manifest.py``, using subclassing to perform actions before and after
+operations, and extend with custom functionality:
 
 .. code-block:: python
 
-    from docker0s import App, MountedApp, Host
-
-    class Traefik(App):
-       # Use local docker-compose and env files
-        path = "../../apps/traefik"
-        compose = "app://docker-compose.prod.yml"
-        env_file = "traefik.env"
+    from docker0s import MountedApp
 
     class Website(MountedApp):
         # Clone a repo to the host and look for docker-compose.yml in there
@@ -64,37 +83,22 @@ Put together a manifest in Python as ``manifest.py``:
             super().up(*services)
             # Perform action after ``up``, eg wait and perform a test
 
+        @App.command
+        def say_hello(self, name):
+            print(f"Hello {name}, this runs locally")
+            self.host.exec("echo And {name}, this is on the host", args={'name': name})
+
     class Vagrant(Host):
         name = "vagrant"
-        secrets = "host.env"
 
 
-or in YAML as ``manifest.yml``:
-
-.. code-block:: yaml
-
-    apps:
-      traefik:
-        path: ../../apps/traefik
-        env_file: traefik.env
-      website:
-        type: MountedApp
-        path: "git+ssh://git@github.com:radiac/example.com.git@main"
-        env:
-          DOMAIN: example.radiac.net
-    host:
-      name: example.radiac.net
-
-
-Then run a command:
-
-
-For example::
+Then run a command, eg::
 
     docker0s deploy
     docker0s up
     docker0s restart website.django
     docker0s exec website.django /bin/bash
+    docker0s cmd website say_hello person
 
 
 Commands
@@ -112,21 +116,32 @@ Commands
 ``docker0s restart [<app>[.<service>]]``:
   Restart all apps, a specific app, or a specific app's service
 
-``docker0s exec <app>.<service> command``:
+``docker0s exec <app>.<service> <command>``:
   Execute a command in the specific service
 
+``docker0s cmd <app> <command> [<args> ...]``
+  Execute a local App command
 
 Options:
 
 ``--manifest=<file>``, ``-m <file>``:
-  Specify the manifest. If not specified, tries ``manifest.py`` then ``manifest.yml`` in
-  the current directory.
+  Specify the manifest. If not specified, tries ``d0s-manifest.py`` then
+  ``d0s-manifest.yml`` in the current directory.
 
 
 Manifest file
 =============
 
 A manifest file defines a list of more or apps which will be deployed to one host.
+
+You can put everything in a single manifest, but usually you will define a generic *app
+manifest* next to a docker-compose.yml, and then extend it in a *host manifest* where
+you set environment variables. The syntax of both is the same, but an app manifest only
+defines apps, whereas a host manifest defines both apps and the host to deploy it to.
+
+See `docker0s-manifests <https://github.com/radiac/docker0s-manifests>`_ for a
+collection of app manifests and examples for how to use them with your host manifest.
+
 
 YAML
 ----
@@ -149,7 +164,8 @@ A manifest file has two sections:
 ``host``:
   The host definition.
 
-  There can be only one per manifest.
+  There can be only one per manifest. Manifests which define a host cannot be used as a
+  base manifest (see ``extends`` attribute).
 
 
 App types
@@ -158,11 +174,12 @@ App types
 ``App``:
   A project with a docker-compose ready for use in production.
 
-  Arguments:
+  Attributes:
 
   ``path``
-    Path to the app. Any ``app://`` paths elsewhere in the app definition will use this
-    as the base path.
+    Path to the app - a directory or repository containing the docker compose file and
+    any other assets docker0s will require. Any ``app://`` paths elsewhere in the app
+    definition will use this as the base path.
 
   ``extends``
     Path to a base docker0s manifest for this app.
@@ -171,16 +188,17 @@ App types
 
     * uses the same syntax
     * can define multiple apps
+    * can reference further base manifests
     * must not define a host
 
     This value can be one of two patterns:
 
-    * ``path/to/manifest.yml`` or ``path/to/manifest.py`` - this app will extend using
-      the app defined with the same name - see "App naming" below
-    * ``path/to/manifest.yml::AppName`` or ``path/to/manifest.py::AppName`` - this app
-      will extend using the app defined with the name ``AppName``.
+    * ``path/to/d0s-manifest.yml`` or ``path/to/d0s-manifest.py`` - this app will extend
+      using the app defined with the same name - see "App naming" below
+    * ``path/to/d0s-manifest.yml::AppName`` or ``path/to/d0s-manifest.py::AppName`` -
+      this app will extend using the app defined with the name ``AppName``.
 
-    Default: ``None``
+    Default: ``app://d0s-manifest.py``, ``app://d0s-manifest.yml`` (first found)
 
   ``compose``
     Path to the app's docker compose file.
@@ -244,9 +262,7 @@ App naming
 
 Because apps are referenced by name in Python, YAML and on the command line, docker0s
 supports apps names in ``PascalCase``, ``camelCase``, ``snake_case`` and ``kebab-case``
-in YAML and the command line.
-
-Python classes must use ``PascalCase``:
+in YAML and the command line. Python classes must always use ``PascalCase``:
 
 .. code-block:: python
 
@@ -273,24 +289,24 @@ Paths
 
 An App ``path`` can be:
 
-* relative to the manifest, eg ``traefik.env`` or ``../../apps/traefik/manifest.yml``.
+* relative to the manifest, eg ``traefik.env`` or ``../apps/traefik/d0s-manifest.yml``.
   Note this is relative to the manifest where this app definition is found, so relative
   paths in a base manifest loaded with ``extend`` will be relative to the base manifest.
-* absolute, eg ``/etc/docker0s/apps/traefik/manifest.yml``.
+* absolute, eg ``/etc/docker0s/apps/traefik/d0s-manifest.yml``.
 * a file in a git repository in the format ``git+<protocol>://<path>@<ref>#<file>``
   where protocol is one of ``git+https`` or ``git+ssh``, and the ref is a
   branch, commit or tag. For example:
 
-  * ``git+ssh://git@github.com:radiac/docker0s@main#apps/traefik/manifest.yml``
-  * ``git+https://github.com/radiac/docker0s@v1.0#apps/traefik/manifest.yml``
+  * ``git+ssh://git@github.com:radiac/docker0s-manifests@main#traefik``
+  * ``git+https://github.com/radiac/docker0s-manifests@v1.0#traefik/d0s-manifest.yml``
 
 
 Other fields which take a path argument (ie ``manifest``, ``compose`` and ``env_file``)
 can use these values, as well as:
 
-* relative to the app's path with ``app://``, eg if ``path = "../../apps/traefik"``
-  then if ``extends = "app://docker0s.py"`` it will look for the base manifest at
-  ``../../apps/traefik/docker0s.py``
+* relative to the app's path with ``app://``, eg if ``path = "../apps/traefik"``
+  then if ``extends = "app://docker0s-base.py"`` it will look for the base manifest at
+  ``../apps/traefik/docker0s-base.py``
 
 For security, when using a remote manifest from a third party git repository, we
 recommend performing a full audit of what you are going to deploy, and then pinning to
@@ -320,6 +336,29 @@ first:
 
 Environment variables are merged and written to an env file on the server for
 docker-compose to use.
+
+
+App commands
+------------
+
+Python App definitions can declare local commands - usually either utility functions to
+assist with manifest definition, such as a password encoder, or to use fabric to perform
+operations on the host, such as tailing docker logs.
+
+To define an app, decorate it with ``App.command``::
+
+    class Website(App):
+        @App.command
+        def say_hello(self, name):
+            print(f"Hello {name}, this runs locally")
+            self.host.exec("echo And {name}, this is on the host", args={'name': name})
+
+
+This can then be called as:
+
+    ./docker0s cmd website say_hello person
+
+Commands currently do not have any support for validation or typing of arguments.
 
 
 Deployment

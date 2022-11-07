@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path, PosixPath
-from typing import Any
+from typing import Any, Callable
 
 from ..env import dump_env, read_env
 from ..host import Host
@@ -34,13 +34,13 @@ class BaseApp(ManifestObject, abstract=True):
     #: This referenced manifest will will act as the base manifest. That in turn can
     #: reference an additional base manifest.
     #:
-    #: Default: ``app://docker0s.py``, then ``app://docker0s.yml``
+    #: Default: ``app://d0s-manifest.py``, then ``app://d0s-manifest.yml``
     extends: str | None = None
 
     # Defaults for ``extends`` - first found will be used
     default_extends: list[str] = [
-        "app://docker0s.py",
-        "app://docker0s.yml",
+        "app://d0s-manifest.py",
+        "app://d0s-manifest.yml",
     ]
 
     #: Filename for docker-compose definition
@@ -144,16 +144,30 @@ class BaseApp(ManifestObject, abstract=True):
         """
         Find the path to the base manifest if one exists, otherwise return None
         """
-        if not cls.extends:
-            return None
+        # Find paths to seek
+        extends: list[str]
+        if cls.extends:
+            extends = [cls.extends]
+        else:
+            extends = cls.default_extends
 
-        base_path = cls.extends
-        if "::" in base_path:
-            base_path = base_path.split("::", 1)[0]
+        # Return the first which exists
+        for base_path in extends:
+            if "::" in base_path:
+                base_path = base_path.split("::", 1)[0]
 
-        extends_path = cls._mk_app_path(base_path)
-        if extends_path.exists():
-            return extends_path
+            extends_path = cls._mk_app_path(base_path)
+            if extends_path.exists():
+                if extends_path.absolute == cls.get_manifest_path().absolute():
+                    # Make sure we didn't find ourselves and get stuck in a loop
+                    # TODO: Check for infinite loop between multiple manifests
+                    if cls.extends:
+                        raise ValueError(
+                            f"Resolving base manifest {cls.extends} for app"
+                            f" {cls.get_name()} led back to current manifest"
+                        )
+                    return None
+                return extends_path
 
         return None
 
@@ -237,6 +251,20 @@ class BaseApp(ManifestObject, abstract=True):
         if cls.set_project_name and "COMPOSE_PROJECT_NAME" not in env:
             env["COMPOSE_PROJECT_NAME"] = cls.get_docker_name()
         return env
+
+    @staticmethod
+    def command(fn):
+        fn.is_command = True
+        return fn
+
+    def get_command(self, name: str) -> Callable:
+        """
+        Return the specified command
+        """
+        attr = getattr(self, name)
+        if callable(attr) and hasattr(attr, "is_command"):
+            return attr
+        raise ValueError(f"Command {name} not found")
 
     @property
     def remote_path(self) -> PosixPath:
