@@ -23,10 +23,10 @@ deploy to a single host.
 
 It's designed for small self-hosted low-maintenance deployments which don't need the
 complexity of Kubernetes - think k8s with zero features and a much simpler config
-syntax.
+syntax, with simple app manifests instead of helm charts.
 
-There is also a collection of app definitions at `docker0s-manifests`_, with examples
-for how to use them to quickly deploy them to your host.
+There is a collection of ready-to-use app manifests at `docker0s-manifests`_, with
+examples for how to deploy them to your host.
 
 .. _docker0s-manifests: https://github.com/radiac/docker0s-manifests
 
@@ -58,8 +58,8 @@ Put together a manifest in YAML as ``d0s-manifest.yml``:
       name: example.radiac.net
 
 
-or in Python as ``d0s-manifest.py``, using subclassing to perform actions before and after
-operations, and extend with custom functionality:
+or in Python as ``d0s-manifest.py``, using subclassing to perform actions before and
+after operations, and to add custom functionality:
 
 .. code-block:: python
 
@@ -378,3 +378,20 @@ Default deployment structure::
               docker-compose.yml
             store/
             env
+
+
+Roadmap
+=======
+
+* Jinja support for templated docker compose files
+* Base manifest hashes, for improved security when pulling remotely
+* Support for gitops through a repository monitoring mode
+
+
+Changelog
+=========
+
+* 1.1.0 - Add command support, ``docker0s cmd ...``; restore default ``extends``;
+  standardise manifest filenames
+* 1.0.1 - Fix for entrypoint
+* 1.0.0 - Initial release
