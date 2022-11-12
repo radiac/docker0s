@@ -14,7 +14,7 @@ import sphinx_radiac_theme  # noqa
 sys.path.insert(0, os.path.abspath("../"))
 sys.path.insert(0, os.path.abspath("../example/"))
 
-import docker0s
+from setup import find_version
 
 
 # -- Project information -----------------------------------------------------
@@ -23,7 +23,7 @@ import docker0s
 project = "docker0s"
 copyright = "2022, Richard Terry"
 author = "Richard Terry"
-release = docker0s.__version__
+release = find_version("..", "docker0s", "__init__.py")
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

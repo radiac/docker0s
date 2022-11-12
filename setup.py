@@ -1,4 +1,5 @@
 import re
+import sys
 from pathlib import Path
 
 from setuptools import setup
@@ -13,4 +14,6 @@ def find_version(*paths):
     raise RuntimeError("Unable to find version string.")
 
 
-setup(version=find_version("docker0s", "__init__.py"))
+# Setup unless this is being imported by Sphinx, which just wants find_version
+if "sphinx" not in sys.modules:
+    setup(version=find_version("docker0s", "__init__.py"))
