@@ -5,6 +5,14 @@ Changelog
 Changes
 =======
 
+1.2.0 - 2022-11-17
+------------------
+
+Features:
+
+* Add Jinja2 template support for docker-compose.yml generation
+
+
 1.1.0 - 2022-11-08
 ------------------
 
