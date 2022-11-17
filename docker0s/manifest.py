@@ -10,7 +10,7 @@ from inspect import isclass
 
 import yaml
 
-from .app import App, BaseApp, app_registry
+from .app import App, BaseApp, abstract_app_registry
 from .app.names import normalise_name
 from .host import Host
 from .path import ManifestPath
@@ -142,9 +142,9 @@ class Manifest:
             if app_type is None:
                 app_base_cls = App
             else:
-                if app_type not in app_registry:
+                if app_type not in abstract_app_registry:
                     raise ValueError(f"Unknown app type {app_type}")
-                app_base_cls = app_registry[app_type]
+                app_base_cls = abstract_app_registry[app_type]
 
             # Update path
             if "path" not in app_raw:
@@ -200,5 +200,10 @@ class Manifest:
         apps: list[BaseApp] = []
         for app_cls in app_classes:
             apps.append(app_cls(host=host))
+
+        # Tell the apps about each other to allow cross-app logic
+        manifest_apps = {a.get_name(): a for a in apps}
+        for app in apps:
+            app.manifest_apps = manifest_apps
 
         return apps

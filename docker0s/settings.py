@@ -11,7 +11,7 @@ CACHE_PATH = Path(getenv("DOCKER0S_CACHE_PATH", LOCAL_PATH / "cache")).expanduse
 #: Remote filename for env files
 FILENAME_ENV = getenv("DOCKER0S_ENV_FILENAME", "env")
 
-#: Remote filename for compose files (some App class may override)
+#: Remote filename for compose files
 FILENAME_COMPOSE = getenv("DOCKER0S_COMPOSE_FILENAME", "docker-compose.yml")
 
 #: Remote dir to hold assets

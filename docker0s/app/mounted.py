@@ -1,6 +1,6 @@
 from pathlib import PosixPath
 
-from ..path import AppPath, ManifestPath
+from ..path import ManifestPath
 from .base import BaseApp
 
 
@@ -23,7 +23,7 @@ class MountedApp(BaseApp, abstract=True):
     path: str = ""
 
     #: Filename for docker-compose definition. Must be an ``app://`` repository URL
-    compose: str = BaseApp.compose
+    compose: str | None = BaseApp.compose
 
     @classmethod
     def get_path(cls) -> ManifestPath:
@@ -31,14 +31,6 @@ class MountedApp(BaseApp, abstract=True):
         if not path.is_git:
             raise ValueError("A MountedApp must specify a git repository as its path")
         return path
-
-    @classmethod
-    def get_compose(cls) -> AppPath:
-        compose = super().get_compose()
-        if not compose.is_app:
-            raise ValueError("A MountedApp must specify an app:// path for its compose")
-
-        return compose
 
     @property
     def remote_repo(self) -> PosixPath:
@@ -49,7 +41,11 @@ class MountedApp(BaseApp, abstract=True):
         """
         A PosixPath to the remote compose file
         """
-        return self.remote_repo / self.get_compose().relative
+        compose_path = self.get_compose_path()
+        path: PosixPath = self.remote_repo / self.get_compose_path().relative
+        if compose_path.filetype == ".jinja2":
+            path = path.with_suffix(".yml")
+        return path
 
     def deploy(self):
         super().deploy()

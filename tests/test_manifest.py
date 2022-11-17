@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from docker0s import App, Host
-from docker0s.app import BaseApp, app_registry
+from docker0s.app import BaseApp, abstract_app_registry
 from docker0s.manifest import Manifest
 from docker0s.path import ManifestPath
 
@@ -18,7 +18,7 @@ def BaseTestApp():
         test_id: str
 
     yield BaseTestApp
-    del app_registry["BaseTestApp"]
+    del abstract_app_registry["BaseTestApp"]
 
 
 def test_manifest__load_py__loads_py():

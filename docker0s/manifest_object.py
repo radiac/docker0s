@@ -34,7 +34,9 @@ class ManifestObject:
         # Names from YAML are normalised by now
         normalised = normalise_name(cls.__name__)
         if normalised != cls.__name__:
-            raise ValueError("Python manifest objects must be named in CamelCase")
+            raise ValueError(
+                f"Python manifest objects must be named in CamelCase: {cls.__name__}"
+            )
 
     @classmethod
     def from_dict(

@@ -4,15 +4,70 @@ import inspect
 from pathlib import Path, PosixPath
 from typing import Any, Callable
 
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
 from ..env import dump_env, read_env
 from ..host import Host
 from ..manifest_object import ManifestObject
 from ..path import AppPath, ManifestPath
 from ..settings import DIR_ASSETS, FILENAME_COMPOSE, FILENAME_ENV
-from .names import pascal_to_snake
+from .names import normalise_name, pascal_to_snake
 
 
-app_registry: dict[str, type[BaseApp]] = {}
+# Abstract app registry for type lookups
+abstract_app_registry: dict[str, type[BaseApp]] = {}
+
+
+class AppsTemplateContext:
+    """
+    Lazy context getter for use in template context `apps`
+    """
+
+    apps: dict[str, BaseApp]
+
+    def __init__(self, apps: dict[str, BaseApp]):
+        self.apps = apps
+
+    def __getitem__(self, name: str) -> dict[str, Any]:
+        return self.get(name)
+
+    def __getattr__(self, name: str) -> dict[str, Any]:
+        return self.get(name)
+
+    def get(self, name: str) -> dict[str, Any]:
+        normalised = normalise_name(name)
+        if normalised not in self.apps:
+            raise ValueError(f"Unknown app {name} ({normalised})")
+        return self.apps[normalised].get_compose_context()
+
+    def __contains__(self, name: str) -> bool:
+        normalised = normalise_name(name)
+        return normalised in self.apps
+
+
+class EnvTemplateContext:
+    """
+    Lazy context getter for use in template context `env`
+    """
+
+    app: BaseApp
+
+    def __init__(self, app: BaseApp):
+        self.app = app
+
+    def __getitem__(self, name: str) -> Any:
+        return self.get(name)
+
+    def __getattr__(self, name: str) -> Any:
+        return self.get(name)
+
+    def get(self, name: str) -> Any:
+        env_data = self.app.get_host_env_data()
+        return env_data[name]
+
+    def __contains__(self, name: str) -> bool:
+        env_data = self.app.get_host_env_data()
+        return name in env_data
 
 
 class BaseApp(ManifestObject, abstract=True):
@@ -43,13 +98,25 @@ class BaseApp(ManifestObject, abstract=True):
         "app://d0s-manifest.yml",
     ]
 
-    #: Filename for docker-compose definition
     #: Path to the app's docker compose file. This will be pushed to the host.
     #:
-    #: For access see ``.get_compose``
+    #: This can be a ``.yml`` file, or a ``.jinja2`` template.
     #:
-    #: Default: ``app://docker-compose.yml``
-    compose: str = "app://docker-compose.yml"
+    #: For access see ``.get_compose_path``
+    #:
+    #: Default: ``app://docker-compose.jinja2``, then ``app://docker-compose.yml``
+    compose: str | None = None
+
+    # Defaults for ``compose`` - first found will be used
+    default_compose: list[str] = [
+        "app://docker-compose.jinja2",
+        "app://docker-compose.yml",
+    ]
+
+    #: Context for docker-compose Jinja2 template rendering
+    #:
+    #: To add instance data, override ``.get_compose_context``
+    compose_context: dict[str, Any] | None = None
 
     #: File containing environment variables for docker-compose
     #:
@@ -67,8 +134,11 @@ class BaseApp(ManifestObject, abstract=True):
     #: set by ``env_file`` or ``env``
     set_project_name: bool = True
 
-    # Host this app instance is bound to - eg App(host=...)
+    # Host this app instance is bound to on initialisation
     host: Host
+
+    # All app instances defined in the manifest which defines this app, including self
+    manifest_apps: dict[str, BaseApp]
 
     def __init_subclass__(
         cls, abstract: bool = False, name: str | None = None, **kwargs
@@ -79,15 +149,16 @@ class BaseApp(ManifestObject, abstract=True):
         super().__init_subclass__(abstract=abstract, name=name, **kwargs)
 
         if abstract:
-            global app_registry  # not required, for clarity
-            if cls.__name__ in app_registry:
+            global abstract_app_registry  # not required, for clarity
+            if cls.__name__ in abstract_app_registry:
                 raise ValueError(
                     f"Abstract class names must be unique, {cls.__name__} is duplicate"
                 )
-            app_registry[cls.__name__] = cls
+            abstract_app_registry[cls.__name__] = cls
 
     def __init__(self, host: Host):
         self.host = host
+        self.other_apps: dict[str, BaseApp] = {}
 
     def __str__(self):
         return self.get_name()
@@ -207,11 +278,22 @@ class BaseApp(ManifestObject, abstract=True):
             cls.__bases__ = (base_app,) + cls.__bases__
 
     @classmethod
-    def get_compose(cls) -> AppPath:
+    def get_compose_path(cls) -> AppPath:
         """
-        Return an AppPath to the compose file
+        Return an AppPath to the compose file or template
         """
-        return cls._mk_app_path(cls.compose)
+        # Find paths to seek
+        composes: list[str]
+        if cls.compose:
+            composes = [cls.compose]
+        else:
+            composes = cls.default_compose
+
+        for compose in composes:
+            compose_app_path = cls._mk_app_path(compose)
+            if compose_app_path.exists():
+                return compose_app_path
+        raise ValueError("Compose path not found")
 
     @classmethod
     def get_env_data(cls) -> dict[str, str | int | None]:
@@ -294,7 +376,55 @@ class BaseApp(ManifestObject, abstract=True):
         """
         return self.remote_path / DIR_ASSETS
 
+    def get_compose_context(self, **kwargs: Any) -> dict[str, Any]:
+        """
+        Build the template context for the compose template
+        """
+        context = {
+            "host": self.host,
+            "env": EnvTemplateContext(self),
+            "apps": AppsTemplateContext(self.manifest_apps),
+            # Reserved for future expansion
+            "docker0s": NotImplemented,
+            "globals": NotImplemented,
+            **kwargs,
+        }
+
+        if self.compose_context is not None:
+            context.update(self.compose_context)
+
+        return context
+
+    def get_compose_content(self, context: dict[str, Any] | None = None) -> str:
+        """
+        Return the content for the docker-compose file
+
+        This will either be rendered from ``compose_template`` if it exists, otherwise
+        it will be read from ``compose``
+        """
+        compose_app_path = self.get_compose_path()
+        if compose_app_path.filetype == ".yml":
+            compose_path = compose_app_path.get_local_path()
+            return compose_path.read_text()
+
+        elif compose_app_path.filetype == ".jinja2":
+            template_path = compose_app_path.get_local_path()
+
+            env = Environment(
+                loader=FileSystemLoader(template_path.parent),
+                autoescape=select_autoescape(),
+            )
+
+            context = self.get_compose_context(**(context or {}))
+            template = env.get_template(template_path.name)
+            return template.render(context)
+
+        raise ValueError(f"Unrecognised compose filetype {compose_app_path.filetype}")
+
     def get_host_env_data(self) -> dict[str, str | int | None]:
+        """
+        Build the env data dict to be sent to the server
+        """
         env_data = self.get_env_data()
         env_data.update(
             {

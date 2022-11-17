@@ -7,7 +7,9 @@ from pathlib import PosixPath
 
 import pytest
 
-from docker0s.app.base import BaseApp
+from docker0s.app.base import AppsTemplateContext, BaseApp, EnvTemplateContext
+
+from ..constants import HOST_NAME
 
 
 @pytest.fixture
@@ -44,6 +46,92 @@ def test_mocked_app__deploy(mock_fabric, base_app):
             "apps/sample_app/env",
         ),
     ]
+
+
+def test_compose_content__template_with_context__renders(mk_manifest, tmp_path):
+    template_path = tmp_path / "docker-compose.jinja2"
+    template_path.write_text(
+        """version: "3.8"
+  services:
+{% if service1 %}
+    service1:
+        image: service1
+{% endif %}
+    service2:
+        image: service2
+    """
+    )
+
+    class TestApp(BaseApp):
+        path = str(tmp_path)
+        compose_context = {"service1": True}
+
+    app = mk_manifest(TestApp).init_apps()[0]
+    assert (
+        app.get_compose_content()
+        == """version: "3.8"
+  services:
+
+    service1:
+        image: service1
+
+    service2:
+        image: service2
+    """
+    )
+
+
+def test_compose_content__reserved_context__data_exists(mk_manifest):
+    class TestApp(BaseApp):
+        pass
+
+    # Create app and manifest
+    manifest = mk_manifest(TestApp)
+    apps = manifest.init_apps()
+    assert len(apps) == 1
+    app = apps[0]
+
+    # Collect reserved context
+    context = app.get_compose_context()
+
+    # Check host
+    assert context["host"] == app.host
+
+    # Check template context objects
+    assert isinstance(context["apps"], AppsTemplateContext)
+    assert isinstance(context["env"], EnvTemplateContext)
+
+    # Check reserved words are there
+    assert context["docker0s"] == NotImplemented
+    assert context["globals"] == NotImplemented
+
+
+def test_compose_content__reserved_context__data_renders(mk_manifest, tmp_path):
+    template_path = tmp_path / "docker-compose.jinja2"
+    template_path.write_text(
+        "host.name={{ host.name }}"
+        " apps.TestApp2.foo={{ apps.TestApp2.foo }}"
+        " apps.TestApp2.baz={{ apps.TestApp2.env.baz }}"
+    )
+
+    class TestApp1(BaseApp):
+        path = str(tmp_path)
+
+    class TestApp2(BaseApp):
+        compose_context = {"foo": "bar"}
+        env = {"baz": "qux"}
+
+    # Create apps and sanity check
+    manifest = mk_manifest(TestApp1, TestApp2)
+    apps = manifest.init_apps()
+    assert len(apps) == 2
+    app1, app2 = apps
+    assert isinstance(app1, TestApp1)
+    assert isinstance(app2, TestApp2)
+
+    assert app1.get_compose_content() == (
+        f"host.name={HOST_NAME} apps.TestApp2.foo=bar apps.TestApp2.baz=qux"
+    )
 
 
 @pytest.mark.parametrize(

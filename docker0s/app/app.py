@@ -1,4 +1,4 @@
-from pathlib import Path, PosixPath
+from pathlib import PosixPath
 
 from .base import BaseApp
 
@@ -21,9 +21,9 @@ class App(BaseApp, abstract=True):
         self.push_assets_to_host()
 
     def push_compose_to_host(self):
-        compose_local: Path = self.get_compose().absolute
+        compose_content: str = self.get_compose_content()
         compose_remote: PosixPath = self.remote_compose
-        self.host.push(compose_local, compose_remote)
+        self.host.write(compose_remote, compose_content)
 
     def push_assets_to_host(self):
         if not self.assets:

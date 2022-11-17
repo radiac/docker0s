@@ -47,3 +47,14 @@ Docker0s will deploy projects to your host using the following directory structu
               docker-compose.yml
             store/
             env
+
+
+Security considerations
+=======================
+
+You must always trust your manifest sources - remember that manifests can be arbitrary
+Python code which is executed locally, and it has full shell access to your host.
+
+For this reason we recommend you perform a full audit of any third-party manifests to
+understand exactly what they are doing, and that if you load manifests using ``git+``
+URLs that you pin them to a specific commit.

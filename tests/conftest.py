@@ -13,8 +13,10 @@ from fabric.runners import Result
 from docker0s import git
 from docker0s import host as docker0s_host
 from docker0s.host import Host
+from docker0s.manifest import Manifest
+from docker0s.path import ManifestPath
 
-from .constants import GITHUB_EXISTS_CONTENT, GITHUB_EXISTS_PARTS
+from .constants import GITHUB_EXISTS_CONTENT, GITHUB_EXISTS_PARTS, HOST_NAME
 
 
 @pytest.fixture
@@ -152,12 +154,37 @@ def mock_fabric(monkeypatch):
 
 
 @pytest.fixture
-def host():
+def host_cls():
     """
-    A sample host instance
+    A sample host class
     """
     return Host.from_dict(
         name="FakeTestHost",
         module="docker0s.tests",
-        data={"name": "localhost", "port": 22, "user": "user"},
-    )()
+        data={"name": HOST_NAME, "port": 22, "user": "user"},
+    )
+
+
+@pytest.fixture
+def host(host_cls):
+    """
+    A sample host instance
+    """
+    return host_cls()
+
+
+@pytest.fixture
+def mk_manifest(host_cls, tmp_path):
+    """
+    Generate a manifest for a list of apps
+    """
+
+    def factory(*app_classes) -> Manifest:
+        manifest = Manifest(ManifestPath(path="manifest.yml", manifest_dir=tmp_path))
+        for app_cls in app_classes:
+            manifest.add_app(app_cls)
+        manifest.host = host_cls
+
+        return manifest
+
+    return factory

@@ -34,3 +34,6 @@ GITHUB_PRIVATE_PARTS = (
     "tests/data/file.txt",
 )
 GITHUB_PRIVATE_CONTENT = GITHUB_EXISTS_CONTENT
+
+# Fixture constants
+HOST_NAME = "localhost"

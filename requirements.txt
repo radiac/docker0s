@@ -22,6 +22,10 @@ fabric==2.7.1
     # via -r requirements.in
 invoke==1.7.1
     # via fabric
+jinja2==3.1.2
+    # via -r requirements.in
+markupsafe==2.1.1
+    # via jinja2
 packaging==21.3
     # via build
 paramiko==2.11.0

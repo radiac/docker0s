@@ -34,12 +34,16 @@ Attributes:
   * ``path/to/d0s-manifest.yml::AppName`` or ``path/to/d0s-manifest.py::AppName`` -
     this app will extend using the app defined with the name ``AppName``.
 
-  Default: ``app://d0s-manifest.py``, ``app://d0s-manifest.yml`` (first found)
+  Default: ``app://d0s-manifest.py``, then ``app://d0s-manifest.yml`` (first found)
 
 ``compose``
   Path to the app's docker compose file.
 
-  Default: ``app://docker-compose.yml``
+  This can be a ``.yml`` file, or a ``.jinja2`` template. See "Compose templates" below
+  for more details of template rendering.
+
+  Default: ``app://docker-compose.jinja2``, then ``app://docker-compose.yml`` (first
+  found)
 
 ``assets``:
   Path or list of paths to assets which should be uploaded into an ``assets`` dir next
@@ -52,6 +56,10 @@ Attributes:
 ``env``
   Key-value pairs of environment variables for docker-compose.
   See "Environment variables" below for details.
+
+``compose_context``
+  Key-value pairs of template variables to render a Jinja2 ``compose`` template.
+  See "Compose templates" below for details.
 
 Example YAML:
 
@@ -175,3 +183,67 @@ first:
 
 Environment variables are merged and written to an env file on the server for
 docker-compose to use.
+
+Environment variables can be used in your ``docker-compose.yml`` as normal, for example::
+
+      services:
+        my_service:
+          environment:
+            domain: "${hostname}"
+
+
+Compose templates
+=================
+
+If the docker-compose file ends in a ``.jinja2`` extension, docker0s will treat it as a
+Jinja2 template. See the `Jinja documentation <https://palletsprojects.com/p/jinja/>`_
+for details of the template syntax.
+
+The template will be able to reference other documents relative to it, regardless of
+whether it is a local file or a remote file on a ``git+...`` url.
+
+The template is rendered with the context dict provided in ``compose_context``, plus the
+following values:
+
+``host``
+  A reference to the instantiated Host object.
+
+  Example usage in a template::
+
+      services:
+        my_service:
+          environment:
+            domain: {{ host.name }}
+
+``env``
+  A reference to the fully resolved environment variables that will be sent to the
+  server. It is recommended  to prefer environment variable substitution (eg
+  ``${env_var}``) as it allows more flexibility when working on the server in the
+  future, but the ``env`` context variable can be useful for conditional statements.
+
+  Example usage in a template::
+
+      services:
+        my_service:
+          environment:
+            {% if env.domain %}
+            domain: ${domain}
+            {% endif %}
+
+``apps``
+  A reference to the compose template contexts of other apps in the current manifest.
+  Note that this includes ``env`` and the other context variables mentioned here.
+
+  Example usage in a template::
+
+      services:
+        my_service:
+          {% if smtp_relay in apps %}
+          networks:
+            - {{ apps.smtp_relay.network }}
+          {% endif %}
+
+``docker0s``, ``globals``
+  Reserved for future use.
+
+Take care not to use these variables in your ``compose_context``.

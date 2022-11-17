@@ -57,13 +57,24 @@ def test_normalise_name__kebab_case_in__pascal_case_out(src, out):
         ("one ", "One"),
         ("one !", "One"),
         ("two words", "TwoWords"),
-        ("two 123 words", "TwoWords"),
+        ("two 123 words", "Two123Words"),
         ("has-three_words", "HasThreeWords"),
         ("this has-four_words", "ThisHasFourWords"),
     ],
 )
 def test_normalise_name__rubbish_in__pascal_case_out(src, out):
     assert normalise_name(src) == out
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        "123 words",
+    ],
+)
+def test_normalise_name__invalid_in__raises_exception(invalid):
+    with pytest.raises(ValueError, match=f"Names must start with A-Z: {invalid}"):
+        _ = normalise_name(invalid)
 
 
 @pytest.mark.parametrize(
