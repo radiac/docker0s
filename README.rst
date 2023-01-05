@@ -54,13 +54,13 @@ Put together a manifest in YAML as ``d0s-manifest.yml``:
 
     apps:
       traefik:
-        path: git+https://github.com/radiac/docker0s-manifests.git@main#traefik
+        extends: git+https://github.com/radiac/docker0s-manifests.git#traefik
         env_file: traefik.env
-      storage:
-        path: ../apps/storage
+      smtp:
+        compose: smtp.yml
       website:
-        type: MountedApp
-        path: "git+ssh://git@github.com:radiac/example.com.git@main"
+        type: RepoApp
+        extends: "git+ssh://git@github.com:radiac/example.com.git@main"
         env:
           DOMAIN: example.radiac.net
     host:
@@ -72,11 +72,11 @@ after operations and add custom functionality:
 
 .. code-block:: python
 
-    from docker0s import MountedApp
+    from docker0s import RepoApp
 
-    class Website(MountedApp):
+    class Website(RepoApp):
         # Clone a repo to the host and look for docker-compose.yml in there
-        path = "git+ssh://git@github.com:radiac/example.com.git@main"
+        extends = "git+ssh://git@github.com:radiac/example.com.git@main"
         env = {
             "DOMAIN": "example.radiac.net"
         }
@@ -97,11 +97,11 @@ See `writing manifests`_ for a full reference
 
 Then run a command, eg::
 
-    docker0s deploy
-    docker0s up
-    docker0s restart website.django
-    docker0s exec website.django /bin/bash
-    docker0s cmd website app_command arguments
+    d0s deploy
+    d0s up
+    d0s restart website.django
+    d0s exec website.django /bin/bash
+    d0s cmd website app_command arguments
 
 See `commands`_ for a full command reference
 

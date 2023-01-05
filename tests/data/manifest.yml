@@ -4,7 +4,7 @@ apps:
     test_id: manifest
     extends: extends_base_first.py
   other_app:
-    path: other_app
+    compose: other_app
 host:
   name: localhost
   port: 2222

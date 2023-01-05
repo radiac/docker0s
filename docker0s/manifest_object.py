@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, TypeVar, get_type_hints
 
 from .app.names import normalise_name
+from .exceptions import DefinitionError
 
 
 ManifestObjectType = TypeVar("ManifestObjectType", bound="ManifestObject")
@@ -30,24 +32,34 @@ class ManifestObject:
         else:
             cls.__name__ = name
 
-        # Ensure that names in Pythonare in CamelCase
+        # Ensure that names in Python are in CamelCase
         # Names from YAML are normalised by now
         normalised = normalise_name(cls.__name__)
         if normalised != cls.__name__:
-            raise ValueError(
+            raise DefinitionError(
                 f"Python manifest objects must be named in CamelCase: {cls.__name__}"
             )
 
     @classmethod
     def from_dict(
-        cls: type[ManifestObjectType], name: str, module: str, data: dict[str, Any]
+        cls: type[ManifestObjectType],
+        name: str,
+        path: Path,
+        module: str,
+        data: dict[str, Any],
     ) -> type[ManifestObjectType]:
         """
         Build a concrete subclass of this app using the data in the dict
+
+        Args:
+            name:   Name of app
+            path:   Path of manifest
+            module: Name of module
+            data:   App attributes
         """
         # No type checking here - see https://github.com/python/mypy/issues/9183 and
         # https://github.com/python/mypy/issues/5865
-        class FromDict(cls, name=name):  # type: ignore
+        class FromDict(cls, name=name, path=path):  # type: ignore
             pass
 
         FromDict.__module__ = module
@@ -57,7 +69,10 @@ class ManifestObject:
 
         for key, value in data.items():
             if key not in annotations:
-                raise ValueError(f"Unexpected attribute {key} for {cls}")
+                raise DefinitionError(
+                    f"Unexpected attribute {key} for {cls.__name__}"
+                    f" {FromDict.get_name()} in {FromDict._file}"
+                )
 
             setattr(FromDict, key, value)
 

@@ -21,7 +21,10 @@ def app(host, compose_path_yml):
     Path is taken from module name: tests/app/
     """
     return App.from_dict(
-        "SampleApp", "tests.app.test_app", {"compose": str(compose_path_yml)}
+        name="SampleApp",
+        path=Path(__file__).parent,
+        module="tests.app.test_app",
+        data={"compose": str(compose_path_yml)},
     )(host)
 
 
@@ -47,7 +50,6 @@ def test_mocked_app__deploy(mock_fabric, app, compose_path_yml):
             mocked.StringIO('COMPOSE_PROJECT_NAME="sample_app"'),
             "apps/sample_app/env",
         ),
-        ("run", "mkdir -p apps/sample_app", None),
         (
             "put",
             mocked.StringIO(compose_path_yml.read_text()),

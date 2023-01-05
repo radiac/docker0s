@@ -78,8 +78,8 @@ Example YAML:
 
 
 
-``docker0s.apps.MountedApp``
-----------------------------
+``docker0s.apps.RepoApp``
+-------------------------
 
 A project which requires the repository to be cloned on the host and mounted into
 the service.
@@ -93,16 +93,39 @@ Takes the same arguments as an ``App``, with the following differences:
   Path to the app's docker compose file. This must be an ``app://`` path within the
   repository.
 
+``repo_compose``
+  Relative path to the compose file within the repository.
+
+  If this path exists in the repo, Docker0s will overwrite it on the server.
+
+
+Recommended configuration:
+
+#. In the root of your repository, create a ``docker-compose.yml`` or
+   ``docker-compose.j2``
+#. Still in the root, create an app manifest - ``d0s-manifest.yml`` or
+   ``d0s-manifest.py``
+#. Add ``docker-compose.docker0s.yml`` to your ``.gitignore``
+
+The ``RepoApp.compose`` will default to find the ``docker-compose.yml`` or ``.j2`` file,
+and will write the production compose to ``docker-compose.docker0s.yml`` so that any
+relative paths in the compose file will still resolve.
+
+If you place the manifest or compose at a different location, you will need to set
+``compose`` and ``repo_compose`` accordingly.
+
+
 Example YAML:
 
 .. code-block:: yaml
 
     apps:
       website:
-        type: MountedApp
+        type: RepoApp
         path: "git+ssh://git@github.com:radiac/example.com.git"
 
 
+.. _app_naming:
 
 App naming
 ==========
@@ -160,6 +183,8 @@ recommend performing a full audit of what you are going to deploy, and then pinn
 that specific commit.
 
 
+.. _app_env:
+
 Environment variables
 =====================
 
@@ -184,66 +209,14 @@ first:
 Environment variables are merged and written to an env file on the server for
 docker-compose to use.
 
-Environment variables can be used in your ``docker-compose.yml`` as normal, for example::
+Environment variables can be used in your ``docker-compose.yml`` as normal, for example:
 
-      services:
-        my_service:
-          environment:
-            domain: "${hostname}"
+.. code-block:: yaml
 
+    services:
+      my_service:
+        environment:
+          domain: "${hostname}"
 
-Compose templates
-=================
-
-If the docker-compose file ends in a ``.jinja2`` extension, docker0s will treat it as a
-Jinja2 template. See the `Jinja documentation <https://palletsprojects.com/p/jinja/>`_
-for details of the template syntax.
-
-The template will be able to reference other documents relative to it, regardless of
-whether it is a local file or a remote file on a ``git+...`` url.
-
-The template is rendered with the context dict provided in ``compose_context``, plus the
-following values:
-
-``host``
-  A reference to the instantiated Host object.
-
-  Example usage in a template::
-
-      services:
-        my_service:
-          environment:
-            domain: {{ host.name }}
-
-``env``
-  A reference to the fully resolved environment variables that will be sent to the
-  server. It is recommended  to prefer environment variable substitution (eg
-  ``${env_var}``) as it allows more flexibility when working on the server in the
-  future, but the ``env`` context variable can be useful for conditional statements.
-
-  Example usage in a template::
-
-      services:
-        my_service:
-          environment:
-            {% if env.domain %}
-            domain: ${domain}
-            {% endif %}
-
-``apps``
-  A reference to the compose template contexts of other apps in the current manifest.
-  Note that this includes ``env`` and the other context variables mentioned here.
-
-  Example usage in a template::
-
-      services:
-        my_service:
-          {% if smtp_relay in apps %}
-          networks:
-            - {{ apps.smtp_relay.network }}
-          {% endif %}
-
-``docker0s``, ``globals``
-  Reserved for future use.
-
-Take care not to use these variables in your ``compose_context``.
+Docker0s provides some environment variables by default - for more information see
+:ref:`compose_env`.

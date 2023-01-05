@@ -4,9 +4,9 @@ Python manifests
 
 .. code-block:: python
 
-    from docker0s import MountedApp
+    from docker0s import RepoApp
 
-    class Website(MountedApp):
+    class Website(RepoApp):
         # Clone a repo to the host and look for docker-compose.yml in there
         path = "git+ssh://git@github.com:radiac/example.com.git@main"
         env = {
@@ -43,7 +43,9 @@ Python App definitions can declare local commands - usually either utility funct
 assist with manifest definition, such as a password encoder, or to use fabric to perform
 operations on the host, such as tailing docker logs.
 
-To define an app, decorate it with ``App.command``::
+To define an app, decorate it with ``App.command``:
+
+.. code-block:: python
 
     class Website(App):
         @App.command
@@ -53,6 +55,8 @@ To define an app, decorate it with ``App.command``::
 
 
 This can then be called as:
+
+.. code-block:: bash
 
     ./docker0s cmd website say_hello person
 

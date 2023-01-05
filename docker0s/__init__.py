@@ -1,4 +1,4 @@
-from .app import App, MountedApp  # noqa
+from .app import App, RepoApp  # noqa
 from .host import Host  # noqa
 
 

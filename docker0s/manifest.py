@@ -7,22 +7,24 @@ import sys
 from importlib.machinery import ModuleSpec, SourceFileLoader
 from importlib.util import module_from_spec
 from inspect import isclass
+from pathlib import Path
 
 import yaml
 
 from .app import App, BaseApp, abstract_app_registry
 from .app.names import normalise_name
+from .exceptions import DefinitionError, UsageError
 from .host import Host
-from .path import ManifestPath
+from .path import path_to_uuid
 
 
 class Manifest:
-    path: ManifestPath
+    path: Path
     apps: list[type[BaseApp]]
     app_lookup: dict[str, type[BaseApp]]
     host: type[Host] | None = None
 
-    def __init__(self, path: ManifestPath):
+    def __init__(self, path: Path):
         self.path = path
         self.apps: list[type[BaseApp]] = []
         self.app_lookup: dict[str, type[BaseApp]] = {}
@@ -34,10 +36,15 @@ class Manifest:
         self.apps.append(app)
         self.app_lookup[app.__name__] = app
 
-    def get_app(self, name: str) -> type[BaseApp] | None:
-        return self.app_lookup.get(name)
+    def has_app(self, name: str) -> bool:
+        return name in self.app_lookup
 
-    def prepare(self, history: list[ManifestPath]):
+    def get_app(self, name: str) -> type[BaseApp]:
+        if app := self.app_lookup.get(name):
+            return app
+        raise DefinitionError(f"No app with name {name} in manifest {self.path}")
+
+    def prepare(self, history: list[Path]):
         """
         Prepare apps and host for use
 
@@ -47,35 +54,36 @@ class Manifest:
             app.apply_base_manifest(history=history)
 
     @classmethod
-    def load(
-        cls, path: ManifestPath, history: list[ManifestPath] | None = None
-    ) -> Manifest:
+    def load(cls, path: Path, history: list[Path] | None = None) -> Manifest:
         if not path.exists():
-            raise ValueError(f"Cannot load {path} - file not found")
+            raise DefinitionError(f"Cannot load {path} - file not found")
 
         if history is None:
             history = []
         if path in history:
-            raise ValueError(f"Cannot load {path} - recursive extends detected")
+            raise DefinitionError(f"Cannot load {path} - recursive extends detected")
         history.append(path)
 
         # Load manifest
-        if path.filetype == ".py":
+        filetype = path.suffix.lower()
+        if filetype == ".py":
             manifest = cls.load_py(path)
-        elif path.filetype == ".yml":
+        elif filetype == ".yml":
             manifest = cls.load_yml(path)
         else:
-            raise ValueError(f"Manifest {path} filetype invalid - must be .yml or .py")
+            raise DefinitionError(
+                f"Manifest {path} filetype invalid - must be .yml or .py"
+            )
 
         manifest.prepare(history)
         return manifest
 
     @classmethod
-    def load_py(cls, path: ManifestPath) -> Manifest:
+    def load_py(cls, path: Path) -> Manifest:
         # Load module
         module = SourceFileLoader(
-            f"docker0s.manifest.loaded.{path.uuid}",
-            str(path.get_local_path()),
+            f"docker0s.manifest.loaded.{path_to_uuid(path)}",
+            str(path),
         ).load_module()
         setattr(module, "__manifest_path__", path)
         sys.modules[module.__name__] = module
@@ -97,43 +105,43 @@ class Manifest:
         return manifest
 
     @classmethod
-    def load_yml(cls, path: ManifestPath) -> Manifest:
-        local_path = path.get_local_path()
-        raw = local_path.read_text()
+    def load_yml(cls, path: Path) -> Manifest:
+        raw = path.read_text()
         data = yaml.safe_load(raw)
 
         # Validate top level
         apps_raw = data.pop("apps", [])
         host_raw = data.pop("host", None)
         if len(data) > 0:
-            raise ValueError(
+            raise DefinitionError(
                 f"Error loading {path}: unexpected root elements {', '.join(data.keys())}"
             )
         if not isinstance(apps_raw, dict):
-            raise ValueError(
+            raise DefinitionError(
                 f"Error loading {path}: expecting root apps definition, found {type(apps_raw)}"
             )
         if host_raw and not isinstance(host_raw, dict):
-            raise ValueError(
+            raise DefinitionError(
                 f"Error loading {path}: expecting root host definition, found {type(host_raw)}"
             )
 
         # Create module and start manifest
         module_spec = ModuleSpec(
-            f"docker0s.manifest.loaded.{path.uuid}",
+            f"docker0s.manifest.loaded.{path_to_uuid(path)}",
             None,
-            origin=str(local_path),
+            origin=str(path),
         )
         module = module_from_spec(module_spec)
-        module.__file__ = str(local_path)
+        module.__file__ = str(path)
         sys.modules[module.__name__] = module
         manifest = Manifest(path)
 
         # Apps
         for app_name, app_raw in apps_raw.items():
             if not isinstance(app_raw, dict):
-                raise ValueError(
-                    f"Error loading {path}: expecting app definition for {app_name}, found {type(app_raw)}"
+                raise DefinitionError(
+                    f"Error loading {path}: expecting app definition"
+                    f" for {app_name}, found {type(app_raw)}"
                 )
 
             # Get app class
@@ -143,24 +151,21 @@ class Manifest:
                 app_base_cls = App
             else:
                 if app_type not in abstract_app_registry:
-                    raise ValueError(f"Unknown app type {app_type}")
+                    raise DefinitionError(f"Unknown app type {app_type}")
                 app_base_cls = abstract_app_registry[app_type]
-
-            # Update path
-            if "path" not in app_raw:
-                app_raw["path"] = str(local_path / "..")
 
             # YAML supports snake case names because it looks nicer.
             # Convert to PascalCase
             name = normalise_name(app_name)
-            if manifest.get_app(name):
-                raise ValueError(
-                    f"Error loading {path}: normalised name collision: {app_name} and {name} are equivalent"
+            if manifest.has_app(name):
+                raise DefinitionError(
+                    f"Error loading {path}: normalised name collision:"
+                    f" {app_name} and {name} are equivalent"
                 )
 
             # Build app class and add to manifest
             app_cls: type[BaseApp] = app_base_cls.from_dict(
-                name=name, module=module.__name__, data=app_raw
+                name=name, path=path, module=module.__name__, data=app_raw
             )
             setattr(module, name, app_cls)
             manifest.add_app(app_cls)
@@ -168,21 +173,26 @@ class Manifest:
         # Host
         if host_raw:
             manifest.host = Host.from_dict(
-                name="ImportedHost", module=module.__name__, data=host_raw
+                name="ImportedHost", path=path, module=module.__name__, data=host_raw
             )
 
         return manifest
+
+    def init_host(self) -> Host:
+        """
+        Instantiate the host
+        """
+        if not self.host:
+            raise UsageError("Cannot initialise a manifest that has no host")
+        return self.host()
 
     def init_apps(self, *app_names: str) -> list[BaseApp]:
         """
         Given one or more names of apps, find them in the registry and initialise them
         with the manifest host
         """
-        # Prepare the host
-        if not self.host:
-            raise ValueError("Cannot initialise a manifest that has no host")
         # Per-exec host options can be added here later
-        host = self.host()
+        host = self.init_host()
 
         # Find app classes
         app_classes: list[type[BaseApp]]
@@ -191,9 +201,7 @@ class Manifest:
         else:
             app_classes = []
             for app_name in app_names:
-                app_cls: type[BaseApp] | None = self.get_app(app_name)
-                if app_cls is None:
-                    raise ValueError(f"Unknown app name {app_name}")
+                app_cls: type[BaseApp] = self.get_app(app_name)
                 app_classes.append(app_cls)
 
         # Initialise the apps

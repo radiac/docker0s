@@ -10,7 +10,7 @@ class TestApp(App):
 
 
 class OtherApp(App):
-    path = "other_app"
+    compose = "other_app"
 
 
 class Vagrant(Host):

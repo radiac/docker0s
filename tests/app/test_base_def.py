@@ -4,84 +4,56 @@ app collects and processes its attributes.
 """
 
 from pathlib import Path
+from unittest.mock import Mock
 
 from docker0s.app import BaseApp
-from docker0s.path import AppPath, ManifestPath
 
 
 manifest_dir = Path(__file__).parent
 
 
-def test_baseapp_is_abstract():
+def test_baseapp__is_abstract():
     assert BaseApp.abstract is True
 
 
-def test_baseapp_subclass_is_concrete():
+def test_baseapp__subclass_is_concrete():
     class TestApp(BaseApp):
         pass
 
     assert TestApp.abstract is False
 
 
-def test_get_name():
+def test_baseapp__get_name():
     class TestApp(BaseApp):
         pass
 
     assert TestApp.get_name() == "TestApp"
 
 
-def test_get_manifest_path():
+def test_baseapp__manifest_path_detected():
     class TestApp(BaseApp):
         pass
 
-    assert TestApp.get_manifest_path() == Path(__file__)
+    assert TestApp._file == Path(__file__)
 
 
-def test_get_manifest_dir():
+def test_baseapp__manifest_dir_dectected():
     class TestApp(BaseApp):
         pass
 
-    assert TestApp.get_manifest_dir() == manifest_dir
+    assert TestApp._dir == Path(__file__).parent
 
 
-def test_get_path(tmp_path):
+def test_apply_base_manifest__no_extends__no_base_loaded(monkeypatch):
     class TestApp(BaseApp):
-        path = str(tmp_path)
+        pass
 
-    actual = TestApp.get_path()
-    expected = ManifestPath(str(tmp_path), manifest_dir=manifest_dir)
-    assert actual.original == expected.original
-    assert actual.manifest_dir == manifest_dir
+    # Should return from initial ``if not cls.extends`` and shouldn't ``get_manifest``
+    mock_get_manifest = Mock()
+    monkeypatch.setattr("docker0s.path.ExtendsPath.get_manifest", mock_get_manifest)
 
-
-def test_mk_app_path(tmp_path):
-    class TestApp(BaseApp):
-        path = str(tmp_path)
-
-    actual = TestApp._mk_app_path("app://foo")
-    expected = AppPath("app://foo", manifest_dir=manifest_dir, app=TestApp)
-
-    assert actual.original == expected.original
-    assert actual.manifest_dir == manifest_dir
-
-
-def test_get_base_manifest__no_extends__returns_none(tmp_path):
-    class TestApp(BaseApp):
-        path = str(tmp_path)
-
-    assert TestApp._get_base_manifest() is None
-
-
-def test_get_base_manifest__extends__returns_app_path(tmp_path):
-    class TestApp(BaseApp):
-        path = str(tmp_path)
-        extends = "../data/extends_base_first.py"
-
-    path = TestApp._get_base_manifest()
-    expected = (manifest_dir / ".." / "data" / "extends_base_first.py").resolve()
-
-    assert isinstance(path, AppPath)
-    assert path.absolute == expected
+    TestApp.apply_base_manifest()
+    mock_get_manifest.assert_not_called()
 
 
 def test_apply_base_manifest__extends__merges_base_classes(tmp_path):
@@ -90,10 +62,15 @@ def test_apply_base_manifest__extends__merges_base_classes(tmp_path):
     """
 
     class TestApp(BaseApp):
-        path = str(tmp_path)
         extends = "../data/extends_base_first.py"
 
     # Apply ``extends``
+    print(
+        "TESTAPP_DIR",
+        TestApp._file,
+        TestApp._dir,
+        (TestApp._dir / "../data/extends_base_first.py").resolve(),
+    )
     TestApp.apply_base_manifest()
 
     # Should have first as the first base

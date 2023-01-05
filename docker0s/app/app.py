@@ -1,5 +1,3 @@
-from pathlib import PosixPath
-
 from .base import BaseApp
 
 
@@ -17,22 +15,19 @@ class App(BaseApp, abstract=True):
         Deploy the docker-compose and assets for this app
         """
         super().deploy()
-        self.push_compose_to_host()
         self.push_assets_to_host()
 
-    def push_compose_to_host(self):
-        compose_content: str = self.get_compose_content()
-        compose_remote: PosixPath = self.remote_compose
-        self.host.write(compose_remote, compose_content)
-
     def push_assets_to_host(self):
-        if not self.assets:
-            return
-        assets = self.assets
-        if isinstance(self.assets, str):
-            assets = [self.assets]
+        cls_assets = self.collect_attr("assets")
+        files: str | list[str]
+        for mro_cls, files in cls_assets:
+            if not files:
+                continue
 
-        for asset in assets:
-            asset_path = self._mk_app_path(asset)
-            remote_path = self.remote_assets / asset_path.relative
-            self.host.push(asset_path.absolute, remote_path)
+            if isinstance(files, str):
+                files = [files]
+
+            for file in files:
+                asset_path = mro_cls._dir / file
+                remote_path = self.remote_assets / file
+                self.host.push(asset_path, remote_path)

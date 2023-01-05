@@ -36,12 +36,13 @@ You do not have to follow this structure, and if you are just deploying off-the-
 app manifests then you can configure it all from a single manifest file if you would
 prefer.
 
+
 Host preparation
 ================
 
 The host will need:
 
 * ``docker`` and ``docker-compose`` (or podman equivalent)
-* ``git`` (optional) - required for ``MountedApp`` apps
+* ``git`` (optional) - required for ``RepoApp`` apps
 * a user to deploy the apps under
 * appropriate firewall and security measures in place

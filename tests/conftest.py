@@ -14,7 +14,6 @@ from docker0s import git
 from docker0s import host as docker0s_host
 from docker0s.host import Host
 from docker0s.manifest import Manifest
-from docker0s.path import ManifestPath
 
 from .constants import GITHUB_EXISTS_CONTENT, GITHUB_EXISTS_PARTS, HOST_NAME
 
@@ -67,6 +66,16 @@ def mock_call(monkeypatch):
             return [(log.cmd, log.cwd) for log in self.stack]
 
     return MockedCall
+
+
+@pytest.fixture()
+def assert_no_calls(mock_call):
+    """
+    Assert the test makes no system call
+    """
+    with mock_call(stdout="") as mocked:
+        yield
+    assert mocked.stack == []
 
 
 @pytest.fixture
@@ -160,6 +169,7 @@ def host_cls():
     """
     return Host.from_dict(
         name="FakeTestHost",
+        path=Path(__file__).parent,
         module="docker0s.tests",
         data={"name": HOST_NAME, "port": 22, "user": "user"},
     )
@@ -180,7 +190,7 @@ def mk_manifest(host_cls, tmp_path):
     """
 
     def factory(*app_classes) -> Manifest:
-        manifest = Manifest(ManifestPath(path="manifest.yml", manifest_dir=tmp_path))
+        manifest = Manifest(tmp_path / "manifest.yml")
         for app_cls in app_classes:
             manifest.add_app(app_cls)
         manifest.host = host_cls

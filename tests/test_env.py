@@ -1,5 +1,4 @@
 from docker0s.env import dump_env, read_env
-from docker0s.path import ManifestPath
 
 
 FILE1 = """# File 1
@@ -21,8 +20,8 @@ def test_read__paths_values__merged(tmp_path):
     file2.write_text(FILE2)
 
     data = read_env(
-        ManifestPath("file1.env", manifest_dir=tmp_path),
-        ManifestPath("file2.env", manifest_dir=tmp_path),
+        file1,
+        file2,
         FOUR="four",
     )
     assert data == {

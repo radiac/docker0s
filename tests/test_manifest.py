@@ -5,7 +5,6 @@ import pytest
 from docker0s import App, Host
 from docker0s.app import BaseApp, abstract_app_registry
 from docker0s.manifest import Manifest
-from docker0s.path import ManifestPath
 
 
 @pytest.fixture
@@ -25,22 +24,21 @@ def test_manifest__load_py__loads_py():
     """
     Manifest TestApp extends first.py::TestApp, which extends second.py::TestApp
     """
-    path = ManifestPath("manifest.py", manifest_dir=Path(__file__) / "../data")
+    path = Path(__file__).parent / "data/manifest.py"
     manifest = Manifest.load(path)
 
     # Should have two apps and one host
     assert len(manifest.apps) == 2
-    TestApp: App = manifest.get_app("TestApp")
-    OtherApp: App = manifest.get_app("OtherApp")
-    VagrantHost: Host = manifest.host
+    TestApp: type[BaseApp] = manifest.get_app("TestApp")
+    OtherApp: type[BaseApp] = manifest.get_app("OtherApp")
+    assert manifest.host is not None
+    VagrantHost: type[Host] = manifest.host
 
     # TestApp Should have test ID of the manifest
     assert TestApp is not None
     assert issubclass(TestApp, App)
-    assert TestApp.test_id == "manifest"
-    assert TestApp.get_path() == ManifestPath(
-        "", manifest_dir=(Path(__file__) / "../data")
-    )
+    assert TestApp.test_id == "manifest"  # type: ignore
+    assert TestApp._dir == Path(__file__).parent / "data"
 
     # Confirm extends works as per
     # tests/test_base_def.py:test_apply_base_manifest__extends__merges_base_classes
@@ -61,7 +59,7 @@ def test_manifest__load_py__loads_py():
 
     # OtherApp should exist
     assert issubclass(OtherApp, App)
-    assert OtherApp.path == "other_app"
+    assert OtherApp.compose == "other_app"
 
     # Host
     assert issubclass(VagrantHost, Host)
@@ -76,18 +74,19 @@ def test_manifest__load_yml__loads_yml(BaseTestApp):
 
     Uses custom base class for internal_id
     """
-    path = ManifestPath("manifest.yml", manifest_dir=Path(__file__) / "../data")
+    path = Path(__file__).parent / "data/manifest.yml"
     manifest = Manifest.load(path)
 
     # Should have two apps and one host
     assert len(manifest.apps) == 2
-    TestApp: App = manifest.get_app("TestApp")
-    OtherApp: App = manifest.get_app("OtherApp")
-    VagrantHost: Host = manifest.host
+    TestApp: type[BaseApp] = manifest.get_app("TestApp")
+    OtherApp: type[BaseApp] = manifest.get_app("OtherApp")
+    assert manifest.host is not None
+    VagrantHost: type[Host] = manifest.host
 
     # TestApp Should have test ID of the manifest
     assert issubclass(TestApp, BaseTestApp)
-    assert TestApp.test_id == "manifest"
+    assert TestApp.test_id == "manifest"  # type: ignore
 
     # Confirm extends works as per
     # tests/test_base_def.py:test_apply_base_manifest__extends__merges_base_classes
@@ -108,7 +107,7 @@ def test_manifest__load_yml__loads_yml(BaseTestApp):
 
     # OtherApp should exist
     assert issubclass(OtherApp, App)
-    assert OtherApp.path == "other_app"
+    assert OtherApp.compose == "other_app"
 
     # Host
     assert issubclass(VagrantHost, Host)

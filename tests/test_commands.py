@@ -4,12 +4,11 @@ import pytest
 
 from docker0s.commands import Target, TargetManager
 from docker0s.manifest import Manifest
-from docker0s.path import ManifestPath
 
 
 @pytest.fixture
 def manifest():
-    path = ManifestPath("manifest.py", manifest_dir=Path(__file__) / "../data")
+    path = Path(__file__).parent / "data/manifest.py"
     manifest = Manifest.load(path)
     return manifest
 

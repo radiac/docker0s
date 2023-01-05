@@ -3,7 +3,7 @@ Test the operations of app definitions - the methods which deploy and call
 docker-compose on the host
 """
 
-from pathlib import PosixPath
+from pathlib import Path, PosixPath
 
 import pytest
 
@@ -19,7 +19,12 @@ def base_app(host):
 
     Path is taken from module name: tests/app/
     """
-    return BaseApp.from_dict("SampleApp", "tests.app.test_base_ops", {})(host)
+    return BaseApp.from_dict(
+        name="SampleApp",
+        path=Path(__file__).parent,
+        module="tests.app.test_base_ops",
+        data={},
+    )(host)
 
 
 def test_app__remote_path(base_app):
@@ -63,7 +68,7 @@ def test_compose_content__template_with_context__renders(mk_manifest, tmp_path):
     )
 
     class TestApp(BaseApp):
-        path = str(tmp_path)
+        compose = str(template_path)
         compose_context = {"service1": True}
 
     app = mk_manifest(TestApp).init_apps()[0]
@@ -115,7 +120,7 @@ def test_compose_content__reserved_context__data_renders(mk_manifest, tmp_path):
     )
 
     class TestApp1(BaseApp):
-        path = str(tmp_path)
+        compose = str(template_path)
 
     class TestApp2(BaseApp):
         compose_context = {"foo": "bar"}

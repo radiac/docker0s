@@ -2,7 +2,7 @@
 YAML manifests
 ==============
 
-A manifest file has two sections:
+A YAML manifest file has two sections:
 
 ``apps``:
   The list of app definitions.
@@ -22,4 +22,23 @@ A manifest file has two sections:
 
   There can be only one per manifest. Manifests which define a host cannot be used as a
   base manifest (see ``extends`` attribute).
+
+
+For example:
+
+.. code-block:: yaml
+
+    apps:
+      traefik:
+        path: git+https://github.com/radiac/docker0s-manifests.git@main#traefik
+        env_file: traefik.env
+      storage:
+        path: ../apps/storage
+      website:
+        type: RepoApp
+        path: "git+ssh://git@github.com:radiac/example.com.git@main"
+        env:
+          DOMAIN: example.radiac.net
+    host:
+      name: example.radiac.net
 

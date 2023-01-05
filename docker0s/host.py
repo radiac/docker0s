@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from io import StringIO
 from pathlib import Path, PosixPath
 from shlex import quote
@@ -25,6 +26,11 @@ class Host(ManifestObject, abstract=True):
     #: Username for login
     user: str | None
 
+    #: Home dir for user
+    #:
+    #: Use ``{user}`` to replace with the Host.user
+    home: str = "/home/{user}/"
+
     #: Path to the docker0s working dir on the server
     #:
     #: Should be absolute or relative to the connecting user's home directory, do not
@@ -47,7 +53,8 @@ class Host(ManifestObject, abstract=True):
         """
         Remote path builder to ensure consistency
         """
-        path = PosixPath(self.root_path) / app
+        home = self.home.format(user=self.user)
+        path = PosixPath(home) / self.root_path / app
         if service:
             path /= service
         return path
@@ -62,6 +69,8 @@ class Host(ManifestObject, abstract=True):
                 host=self.name,
                 port=self.port,
                 user=self.user,
+                connect_kwargs={"allow_agent": True},
+                forward_agent=True,
             )
         return self._connection
 
@@ -70,6 +79,9 @@ class Host(ManifestObject, abstract=True):
         cmd: str,
         args: dict[str, Any] | None = None,
         env: dict[str, Any] | None = None,
+        cwd: PosixPath | str | None = None,
+        can_fail: bool = False,
+        verbose: bool = True,
     ) -> Result:
         """
         Execute a command on the remote server
@@ -86,8 +98,18 @@ class Host(ManifestObject, abstract=True):
         if args is not None:
             safe_args = {key: quote(str(val)) for key, val in args.items()}
             cmd = cmd.format(**safe_args)
-        result: Result = self.connection.run(cmd, env=env)
-        if not result.ok:
+
+        result: Result
+        with self.connection.cd(str(cwd or "")):
+            result = self.connection.run(
+                cmd,
+                env=env,
+                warn=can_fail,
+                echo=verbose,
+                hide=False if verbose else "both",
+            )
+
+        if not result.ok and not can_fail:
             raise ValueError(f"Command '{cmd}' failed: {result.stderr.strip()}")
         return result
 
@@ -127,6 +149,7 @@ class Host(ManifestObject, abstract=True):
         data = StringIO(content)
         self.connection.put(data, str(filename))
 
+    @lru_cache
     def ensure_parent_path(self, filename: PosixPath):
         """
         Given a path to a file, ensure the parent directory exists.
@@ -138,13 +161,25 @@ class Host(ManifestObject, abstract=True):
         will connect to the server and run::
 
             mkdir -p "{root}/app_name"
+
+        This will only ever be run once per host.
         """
         self.mkdir(filename.parent)
 
+    @lru_cache
     def mkdir(self, path: PosixPath):
         """
-        Make the specified dir and any parent dirs on the host
+        Make the specified dir and any parent dirs on the host.
 
-        If it already exists, fail silently
+        If it already exists, fail silently.
+
+        This will only ever be run once per host.
         """
         self.exec("mkdir -p {path}", args={"path": path})
+
+    def exists(self, path: PosixPath | str) -> bool:
+        """
+        Return True if the path exists on the host
+        """
+        result = self.exec("test -e {path}", args={"path": path}, can_fail=True)
+        return result.ok

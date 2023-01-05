@@ -1,287 +1,131 @@
 from __future__ import annotations
 
 import hashlib
-import re
-from io import TextIOWrapper
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any
 
-from . import git
-
-
-if TYPE_CHECKING:
-    from .app import BaseApp
-
-GIT_SSH_PATTERN = re.compile(
-    # url: git@github.com:username/repo
-    r"^git\+ssh://(?:(?P<url>.+?:.+?))"
-    # ref: a tag, branch or commit
-    r"(@(?P<ref>.+?))?"
-    # path: a file within the repo
-    r"(#(?P<path>.+?))?$"
-)
-GIT_HTTPS_PATTERN = re.compile(
-    # url: https://github.com/username/repo
-    r"^git\+(?P<url>https://.+?)"
-    # ref: a tag, branch or commit
-    r"(@(?P<ref>.+?))?"
-    # path: a file within the repo
-    r"(#(?P<path>.+?))?$"
-)
+from .exceptions import DefinitionError
+from .git import fetch_repo, parse_git_url
 
 
-class ManifestPath:
+def find_manifest(path: Path) -> Path | None:
     """
-    A path in a manifest, which can be:
+    Look within the given Path for a manifest file
 
-    * relative to the manifest's dir, eg ``traefik.env`` or
-      ``../../apps/traefik/manifest.yml``
-    * absolute, eg ``/etc/docker0s/apps/traefik/manifest.yml``
-    * a file in a git repository in the format ``git+<protocol>://<path>@<ref>#<file>``
-      where protocol is one of ``git+file``, ``git+https``, ``git+ssh``, and the ref is
-      a branch, commit or tag. For example
-      ``git+ssh://git@github.com:radiac/docker0s@main#apps/traefik/manifest.yml`` or
-      ``git+https://github.com/radiac/docker0s@v1.0#apps/traefik/manifest.yml``
+    Returns the full Path to the manifest, or None if not found
+    """
+    files = [
+        "d0s-manifest.py",
+        "d0s-manifest.yml",
+        "d0s-manifest.yaml",
+    ]
 
+    # Return the first which exists
+    for filename in files:
+        filepath = path / filename
+        if filepath.exists():
+            return filepath
+
+    return None
+
+
+def path_to_uuid(path: Path) -> str:
+    """
+    Convert a path into a UUID
+    """
+    hash = hashlib.md5(str(path).encode()).hexdigest()
+    return f"_{hash}"
+
+
+def path_to_relative(root: Path, path: Path) -> str:
+    """
+    Given a root path and a sub-path, return the trailing relative path
+    """
+    if not path.is_relative_to(root):
+        raise DefinitionError(f"Path {path} is not a sub-path of {root}")
+    relative = str(path)[len(str(root)) :]
+    return relative.lstrip("/")
+
+
+class ExtendsPath:
+    """
+    Path to a base manifest
     """
 
-    # Original full path
+    #: Original ``extends`` path, or dir containing a base d0s-manifest
     original: str
 
-    # Dir containing the manifest, for relative urls
-    manifest_dir: Path
+    #: Current working directory - directory of the manifest which set ``extends`` - for
+    #: resolving relative paths
+    cwd: Path
 
-    def __init__(self, path: str | ManifestPath, manifest_dir: Path):
-        if isinstance(path, ManifestPath):
-            path = path.original
+    #: Full ``extends`` path to the manifest, or dir containing a d0s-manifest
+    path: Path
+
+    #: Git repository
+    repo: str | None = None
+    ref: str | None = None
+
+    #: App name within the manifest
+    name: str | None = None
+
+    def __init__(self, path: str, cwd: Path):
+        """
+        Resolve the path to a local Path, retrieving a local copy if a remote source
+        """
         self.original = path
-        self.manifest_dir = manifest_dir
+        self.cwd = cwd
 
-    def __str__(self) -> str:
-        if self.is_local:
-            return str(self.absolute)
-        return self.original
+        if path.startswith(("git+ssh://", "git+https://")):
+            # Break up URL into parts
+            self.repo, self.ref, repo_rel_path, self.name = parse_git_url(path)
 
-    def __repr__(self):
-        return f"<{type(self).__name__} '{self}'>"
+            # Pull and build local path
+            repo_local_path = self._pull_repo()
+            self.path = (repo_local_path / (repo_rel_path or "")).resolve()
 
-    def __eq__(self, other: object) -> bool:
-        return str(self) == str(other)
-
-    @property
-    def path(self) -> str:
-        return self.original
-
-    @property
-    def uuid(self) -> str:
-        """
-        Return a unique string for this path which is safe for use as a module name
-
-        Will match another ManifestPath created with the same path, or an AppPath
-        which resolves to the same path
-        """
-        if self.is_local:
-            path = str(self.absolute)
+            # Validate local path
+            #
+            # This is to catch mistakes and bad practice, not security issues - we'll
+            # potentially be running Python with no attempt at sandboxing
+            if not self.path.is_relative_to(repo_local_path):
+                raise DefinitionError(
+                    f"Invalid git URL format {path}"
+                    f" - repo path {repo_rel_path} not relative to repo root"
+                )
         else:
-            path = self.path
+            if "::" in path:
+                path, self.name = path.split("::")
+            self.path = (self.cwd / path).resolve()
 
-        hash = hashlib.md5(path.encode()).hexdigest()
-        return f"_{hash}"
-
-    @property
-    def is_local(self):
-        if self.is_git:
-            return False
-        return True
-
-    @property
-    def is_absolute(self):
-        return Path(self.path).is_absolute()
-
-    @property
-    def is_git(self):
-        if self.path.startswith(("git+ssh://", "git+https://")):
-            return True
-        return False
-
-    @property
-    def absolute(self):
+    def __truediv__(self, other: Any) -> Path:
         """
-        If this is a local path, return the normalised absolute path, otherwise raise a
-        ValueError
+        Add ``other`` to this path, where ``other`` must be within this path
         """
-        if not self.is_local:
-            raise ValueError("ManifestPath.absolute only supports local URLs")
-        path = self.manifest_dir / Path(self.path)
-        return path.resolve()
+        return (self.path / other).resolve()
 
-    @property
-    def parts(self):
+    def _pull_repo(self) -> Path:
         """
-        If this is a git URL, return a dict of parts, otherwise raise a ValueError
-
-        Parts:
-            url
-            ref
-            path
+        Clone local copy of repo
         """
-        if not self.is_git:
-            raise ValueError("ManifestPath.parts only supports git URLs")
+        local_path: Path = fetch_repo(self.repo, self.ref)
+        return local_path
 
-        if self.path.startswith("git+ssh://"):
-            pattern = GIT_SSH_PATTERN
-        elif self.path.startswith("git+https://"):
-            pattern = GIT_HTTPS_PATTERN
-        else:
-            # Impossible unless someone has changed is_git
-            raise RuntimeError("Subclass has broken git URL resolution")  # noqa
+    def get_manifest(self) -> Path:
+        # If we've been given the path to the manifest file then we're already there
+        if self.path.is_file():
+            return self.path
 
-        matches = pattern.match(self.path)
-        if not matches:
-            raise ValueError("Unexpected git url pattern")
+        # Not found, we must have a dir to search
+        if not self.path.is_dir():
+            raise DefinitionError(
+                f"Manifest not found at {self.path} ({self.original})"
+            )
 
-        data = matches.groupdict()
-        if data["ref"] is None:
-            data["ref"] = ""
-        if data["path"] is None:
-            data["path"] = ""
-        return data
-
-    @property
-    def filetype(self) -> str:
-        """
-        Return the file type based on the filename suffix, if one is present.
-
-        Does not necessarily match the suffix: forces to lowercase, standardises .yaml
-        to .yml. Includes the leading period.
-        """
-        if "." not in self.path:
-            return ""
-        suffix = self.path.rsplit(".", 1)[1].lower()
-        if suffix == "yaml":
-            suffix = "yml"
-        return f".{suffix}"
-
-    def exists(self):
-        if self.is_local:
-            return self.absolute.exists()
-
-        elif self.is_git:
-            parts = self.parts
-            return git.exists(parts["url"], parts["ref"], parts["path"])
-
-        raise ValueError(f"Unsupported path {self.path}")
-
-    def get_local_path(self) -> Path:
-        if self.is_local:
-            return self.absolute
-
-        elif self.is_git:
-            parts = self.parts
-            return git.fetch_file(parts["url"], parts["ref"], parts["path"])
-
-        raise ValueError(f"Unsupported path {self.path}")
-
-    def read_text(self) -> str:
-        """
-        Read file text contents into a string
-        """
-        if self.is_local:
-            return self.absolute.read_text()
-
-        elif self.is_git:
-            parts = self.parts
-            return git.read_text(parts["url"], parts["ref"], parts["path"])
-
-        raise ValueError(f"Unsupported path {self.path}")
-
-    def stream_text(self) -> TextIOWrapper:
-        """
-        Return a stream for the file contents
-        """
-        if self.is_local:
-            return open(self.absolute, "r")
-
-        elif self.is_git:
-            parts = self.parts
-            return git.stream_text(parts["url"], parts["ref"], parts["path"])
-
-        raise ValueError(f"Unsupported path {self.path}")
-
-
-class AppPath(ManifestPath):
-    """
-    A ManifestPath which also supports paths relative to the App's ``path``:
-
-    * relative to the app's path with ``app://``, eg if ``path = "../../apps/traefik"``
-    then if an AppPath of ``app://docker0s.py" will look for the base manifest at
-    ``../../apps/traefik/docker0s.py``
-
-    This will apply to any ManifestPath defined on an App other than ``path``
-    """
-
-    app: type[BaseApp]
-    _relative: str | None
-
-    def __init__(
-        self, path: str | ManifestPath, manifest_dir: Path, app: type[BaseApp]
-    ):
-        super().__init__(path, manifest_dir)
-        self.app = app
-        self._relative = ""
-
-        if self.is_app:
-            # Strip app:// from the start and check it's not trying to break free
-            self._relative = self.original[len("app://") :]
-            if not Path(self._relative).resolve().is_relative_to(Path(".").resolve()):
-                raise ValueError("App path must be within the app root")
-
-    def __str__(self) -> str:
-        if self.is_app:
-            return str(self.path)
-        return super().__str__()
-
-    @property
-    def relative(self) -> str:
-        """
-        Relative path
-        """
-        if self._relative is None:
-            raise ValueError("Not an app:// URL")
-
-        return self._relative
-
-    @property
-    def path(self) -> str:
-        if not self.is_app:
-            return self.original
-
-        app_path = self.app.get_path()
-
-        if app_path.is_local:
-            path = Path(app_path.original) / self.relative
-            return str(path)
-
-        elif app_path.is_git:
-            original = str(app_path.original)
-            root: str
-            file_path: str
-            if "#" in original:
-                root, file_path = original.split("#", 1)
-            else:
-                root = original
-                file_path = ""
-
-            if file_path:
-                new_path = str(Path(file_path) / self.relative)
-            else:
-                new_path = self.relative
-            return f"{root}#{new_path}"
-
-        raise ValueError(f"Unsupported path {self.original}")
-
-    @property
-    def is_app(self):
-        if self.original.startswith("app://"):
-            return True
-        return False
+        # We'll search for these
+        filepath = find_manifest(self.path)
+        if filepath is None:
+            raise DefinitionError(
+                f"Manifest not found in {self.path} ({self.original})"
+            )
+        return filepath
