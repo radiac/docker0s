@@ -3,50 +3,7 @@ from pathlib import Path
 import pytest
 
 from docker0s.exceptions import DefinitionError
-from docker0s.path import (
-    GIT_HTTPS_PATTERN,
-    GIT_SSH_PATTERN,
-    path_to_relative,
-    path_to_uuid,
-)
-
-
-ssh_url = "git+ssh://git@github.com:username/repo@branch#path/to/file"
-https_url = "git+https://github.com/username/repo@branch#path/to/file"
-
-
-def test_git_ssh_pattern__ssh_pattern__match():
-    matches = GIT_SSH_PATTERN.match(ssh_url)
-    assert matches
-    data = matches.groupdict()
-    assert data == {
-        "repo": "git@github.com:username/repo",
-        "ref": "branch",
-        "path": "path/to/file",
-        "name": None,
-    }
-
-
-def test_git_ssh_pattern__not_ssh_pattern__no_match():
-    matches = GIT_SSH_PATTERN.match(https_url)
-    assert not matches
-
-
-def test_git_https_pattern__https_pattern__match():
-    matches = GIT_HTTPS_PATTERN.match(https_url)
-    assert matches
-    data = matches.groupdict()
-    assert data == {
-        "repo": "https://github.com/username/repo",
-        "ref": "branch",
-        "path": "path/to/file",
-        "name": None,
-    }
-
-
-def test_git_https_pattern__not_https_pattern__no_match():
-    matches = GIT_HTTPS_PATTERN.match(ssh_url)
-    assert not matches
+from docker0s.path import path_to_relative, path_to_uuid
 
 
 @pytest.mark.parametrize(

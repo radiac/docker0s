@@ -2,9 +2,53 @@ import hashlib
 
 import pytest
 
-from docker0s.git import CommandError, call_or_die, fetch_repo
+from docker0s.git import (
+    GIT_HTTPS_PATTERN,
+    GIT_SSH_PATTERN,
+    CommandError,
+    call_or_die,
+    fetch_repo,
+)
 
 from .constants import GITHUB_EXISTS_PARTS
+
+
+ssh_url = "git+ssh://git@github.com:username/repo@branch#path/to/file"
+https_url = "git+https://github.com/username/repo@branch#path/to/file"
+
+
+def test_git_ssh_pattern__ssh_pattern__match():
+    matches = GIT_SSH_PATTERN.match(ssh_url)
+    assert matches
+    data = matches.groupdict()
+    assert data == {
+        "repo": "git@github.com:username/repo",
+        "ref": "branch",
+        "path": "path/to/file",
+        "name": None,
+    }
+
+
+def test_git_ssh_pattern__not_ssh_pattern__no_match():
+    matches = GIT_SSH_PATTERN.match(https_url)
+    assert not matches
+
+
+def test_git_https_pattern__https_pattern__match():
+    matches = GIT_HTTPS_PATTERN.match(https_url)
+    assert matches
+    data = matches.groupdict()
+    assert data == {
+        "repo": "https://github.com/username/repo",
+        "ref": "branch",
+        "path": "path/to/file",
+        "name": None,
+    }
+
+
+def test_git_https_pattern__not_https_pattern__no_match():
+    matches = GIT_HTTPS_PATTERN.match(ssh_url)
+    assert not matches
 
 
 def test_call_or_die__success__returns_response(tmp_path):
@@ -53,6 +97,8 @@ def test_fetch_repo__not_in_cache__clones_and_pulls(mock_call, cache_path):
         (("git", "remote", "add", "origin", url), repo_path),
         (("git", "fetch", "origin", ref, "--depth=1"), repo_path),
         (("git", "checkout", ref), repo_path),
+        (("git", "rev-parse", "--abbrev-ref", "--verify", "main@{u}"), repo_path),
+        (("git", "reset", "--hard", "origin/main"), repo_path),
     ]
 
 
@@ -68,4 +114,6 @@ def test_fetch_repo__in_cache__just_pulls(mock_call, cache_path):
     assert mocked.cmd_cwd_stack == [
         (("git", "fetch", "origin", ref, "--depth=1"), repo_path),
         (("git", "checkout", ref), repo_path),
+        (("git", "rev-parse", "--abbrev-ref", "--verify", "main@{u}"), repo_path),
+        (("git", "reset", "--hard", "origin/main"), repo_path),
     ]

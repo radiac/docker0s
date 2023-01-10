@@ -11,11 +11,15 @@ Changes
 Features:
 
 * Simplify path specification so everything is relative to the originating manifest
-* Fix inherited path resolution to be relative to the originating manifest's path
 * Rename ``MountedApp`` to ``RepoApp``, add ``repo`` and ``repo_compose`` arguments
 * Add ``d0s`` command alias
 * Add ``d0s use`` to set a default manifest
 * Add ``d0s status`` and ``d0s log`` to assist host management
+
+Bugfix:
+
+* Fix inherited path resolution to be relative to the originating manifest's path
+* Fix ``d0s exec``
 
 
 1.2.0 - 2022-11-17
@@ -39,12 +43,15 @@ Features:
 1.0.1 - 2022-10-31
 ------------------
 
+Bugfix:
+
 * Fix for entrypoint
+
 
 1.0.0 - 2022-10-31
 ------------------
 
-* 1.0.0 - Initial release
+Initial release
 
 
 

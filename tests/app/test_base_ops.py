@@ -23,20 +23,24 @@ def base_app(host):
         name="SampleApp",
         path=Path(__file__).parent,
         module="tests.app.test_base_ops",
-        data={},
+        data=dict(
+            compose="data/docker-compose.yml",
+        ),
     )(host)
 
 
 def test_app__remote_path(base_app):
-    assert base_app.remote_path == PosixPath("apps/sample_app")
+    assert base_app.remote_path == PosixPath("/home/user/apps/sample_app")
 
 
 def test_app__remote_compose(base_app):
-    assert base_app.remote_compose == PosixPath("apps/sample_app/docker-compose.yml")
+    assert base_app.remote_compose == PosixPath(
+        "/home/user/apps/sample_app/docker-compose.yml"
+    )
 
 
 def test_app__remote_env(base_app):
-    assert base_app.remote_env == PosixPath("apps/sample_app/env")
+    assert base_app.remote_env == PosixPath("/home/user/apps/sample_app/env")
 
 
 def test_mocked_app__deploy(mock_fabric, base_app):
@@ -44,11 +48,28 @@ def test_mocked_app__deploy(mock_fabric, base_app):
         base_app.deploy()
 
     assert mocked.flat_stack == [
-        ("run", "mkdir -p apps/sample_app", None),
+        ("run", "mkdir -p /home/user/apps/sample_app", None),
         (
             "put",
-            mocked.StringIO('COMPOSE_PROJECT_NAME="sample_app"'),
-            "apps/sample_app/env",
+            mocked.StringIO(
+                'version: "3.8"\n'
+                "services:\n"
+                "  service1:\n"
+                "    image: service1\n"
+                "  service2:\n"
+                "    image: service2\n"
+            ),
+            "/home/user/apps/sample_app/docker-compose.yml",
+        ),
+        (
+            "put",
+            mocked.StringIO(
+                'COMPOSE_PROJECT_NAME="sample_app"\n'
+                'ENV_FILE="/home/user/apps/sample_app/env"\n'
+                'ASSETS_PATH="/home/user/apps/sample_app/assets"\n'
+                'STORE_PATH="/home/user/apps/sample_app/store"'
+            ),
+            "/home/user/apps/sample_app/env",
         ),
     ]
 
@@ -155,8 +176,8 @@ def test_mocked_app__call_compose(cmd, cmd_args, cmd_out, mock_fabric, base_app)
             "run",
             (
                 "docker-compose "
-                "--file apps/sample_app/docker-compose.yml "
-                "--env-file apps/sample_app/env "
+                "--file /home/user/apps/sample_app/docker-compose.yml "
+                "--env-file /home/user/apps/sample_app/env "
             )
             + cmd_out,
             None,
@@ -190,8 +211,8 @@ def test_mocked_app__call_up(services, cmds_out, mock_fabric, base_app):
             "run",
             (
                 "docker-compose "
-                "--file apps/sample_app/docker-compose.yml "
-                "--env-file apps/sample_app/env "
+                "--file /home/user/apps/sample_app/docker-compose.yml "
+                "--env-file /home/user/apps/sample_app/env "
             )
             + expected_cmd,
             None,
@@ -224,8 +245,8 @@ def test_mocked_app__call_down(services, cmds_out, mock_fabric, base_app):
             "run",
             (
                 "docker-compose "
-                "--file apps/sample_app/docker-compose.yml "
-                "--env-file apps/sample_app/env "
+                "--file /home/user/apps/sample_app/docker-compose.yml "
+                "--env-file /home/user/apps/sample_app/env "
             )
             + expected_cmd,
             None,
@@ -258,8 +279,8 @@ def test_mocked_app__call_restart(services, cmds_out, mock_fabric, base_app):
             "run",
             (
                 "docker-compose "
-                "--file apps/sample_app/docker-compose.yml "
-                "--env-file apps/sample_app/env "
+                "--file /home/user/apps/sample_app/docker-compose.yml "
+                "--env-file /home/user/apps/sample_app/env "
             )
             + expected_cmd,
             None,
@@ -279,8 +300,8 @@ def test_mocked_app__call_exec(service, cmd, cmd_out, mock_fabric, base_app):
             "run",
             (
                 "docker-compose "
-                "--file apps/sample_app/docker-compose.yml "
-                "--env-file apps/sample_app/env "
+                "--file /home/user/apps/sample_app/docker-compose.yml "
+                "--env-file /home/user/apps/sample_app/env "
             )
             + cmd_out,
             None,

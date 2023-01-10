@@ -10,12 +10,10 @@ App types
 
 A project with a docker-compose ready for use in production.
 
-Attributes:
+Unless otherwise specified, all paths are relative to the manifest where they are
+defined.
 
-``path``
-  Path to the app - a directory or repository containing the docker compose file and
-  any other assets docker0s will require. Any ``app://`` paths elsewhere in the app
-  definition will use this as the base path.
+Attributes:
 
 ``extends``
   Path to a base docker0s manifest for this app.
@@ -27,27 +25,41 @@ Attributes:
   * can reference further base manifests
   * must not define a host
 
-  This value can be one of two patterns:
+  A path can be a relative (to the current manifest) or absolute path:
 
-  * ``path/to/d0s-manifest.yml`` or ``path/to/d0s-manifest.py`` - this app will extend
-    using the app defined with the same name - see "App naming" below
-  * ``path/to/d0s-manifest.yml::AppName`` or ``path/to/d0s-manifest.py::AppName`` -
-    this app will extend using the app defined with the name ``AppName``.
+  * ``path/to/d0s-manifest.yml``
+  * ``/path/to/dir/containing/a/manifest/``
 
-  Default: ``app://d0s-manifest.py``, then ``app://d0s-manifest.yml`` (first found)
+  It will look for an app with the same name by default; you can specify a different
+  name with ``::<name>``, eg:
+
+  * ``path/to/d0s-manifest.yml::AppName``
+
+  It can also be a git URL in the format ``git+ssh://host:repo@commit#path::name``, or
+  ``git+https://host/repo@commit#path::name``, where commit, path and name are optional, eg:
+
+  * ``git+ssh://git@github.com:radiac/docker0s-manifests@main#traefik``
+  * ``git+https://github.com/radiac/docker0s-manifests@v1.0#traefik/d0s-manifest.yml``
+  * ``git+ssh://git@github.com:radiac/example.com``
+
+  For security, when using a remote manifest from a third party git repository, we
+  recommend performing a full audit of what you are going to deploy, and then pinning to
+  that specific commit.
+
+  Default: ``d0s-manifest.py``, then ``d0s-manifest.yml`` (first found)
 
 ``compose``
   Path to the app's docker compose file.
 
-  This can be a ``.yml`` file, or a ``.jinja2`` template. See "Compose templates" below
-  for more details of template rendering.
+  This can be a YAML file (``.yml``, ``.yaml``), or a Jinja2 template (``.j2``,
+  ``.jinja2``). See "Compose templates" below for more details of template rendering.
 
-  Default: ``app://docker-compose.jinja2``, then ``app://docker-compose.yml`` (first
-  found)
+  Default: tries the following in order, uses first found: ``docker-compose.j2``,
+  ``docker-compose.jinja2``, ``docker-compose.yml``, ``docker-compose.yaml``
 
 ``assets``:
   Path or list of paths to assets which should be uploaded into an ``assets`` dir next
-  to the docker-compose. Must be ``app://`` paths.
+  to the docker-compose.
 
 ``env_file``
   Path or list of paths to files containing environment variables for docker-compose.
@@ -67,15 +79,13 @@ Example YAML:
 
     apps:
       website:
-        path: "git+ssh://git@github.com:radiac/example.com.git"
-        extends: "app://docker0s-base.py"
-        config: "app://docker-compose.live.yml"
+        extends: "git+ssh://git@github.com:radiac/example.com.git"
+        compose: "docker-compose.live.yml"
         env_file:
-        - app://base.env
+        - base.env
         - website.env
         env:
           deployment=www.example.com
-
 
 
 ``docker0s.apps.RepoApp``
@@ -86,12 +96,8 @@ the service.
 
 Takes the same arguments as an ``App``, with the following differences:
 
-``path``
-  Path to the app. This must be a git repository.
-
-``compose``
-  Path to the app's docker compose file. This must be an ``app://`` path within the
-  repository.
+``repo``
+  A ``git+`` URL to the repository and branch/commit to deploy to the server.
 
 ``repo_compose``
   Relative path to the compose file within the repository.
@@ -114,7 +120,6 @@ relative paths in the compose file will still resolve.
 If you place the manifest or compose at a different location, you will need to set
 ``compose`` and ``repo_compose`` accordingly.
 
-
 Example YAML:
 
 .. code-block:: yaml
@@ -122,7 +127,9 @@ Example YAML:
     apps:
       website:
         type: RepoApp
-        path: "git+ssh://git@github.com:radiac/example.com.git"
+        repo: "git+ssh://git@github.com:radiac/example.com.git@main"
+        compose: docker/docker-compose.live.j2
+        repo_compose: docker/docker-compose.live.yml
 
 
 .. _app_naming:
@@ -152,36 +159,6 @@ YAML can use any - these four app definitions are equivalent (so would raise an 
         path: ../website
       WebsiteExampleCom:
         path: ../website
-
-
-Paths
-=====
-
-An App ``path`` can be:
-
-* relative to the manifest, eg ``traefik.env`` or ``../apps/traefik/d0s-manifest.yml``.
-  Note this is relative to the manifest where this app definition is found, so relative
-  paths in a base manifest loaded with ``extend`` will be relative to the base manifest.
-* absolute, eg ``/etc/docker0s/apps/traefik/d0s-manifest.yml``.
-* a file in a git repository in the format ``git+<protocol>://<path>@<ref>#<file>``
-  where protocol is one of ``git+https`` or ``git+ssh``, and the ref is a
-  branch, commit or tag. For example:
-
-  * ``git+ssh://git@github.com:radiac/docker0s-manifests@main#traefik``
-  * ``git+https://github.com/radiac/docker0s-manifests@v1.0#traefik/d0s-manifest.yml``
-
-
-Other fields which take a path argument (ie ``manifest``, ``compose`` and ``env_file``)
-can use these values, as well as:
-
-* relative to the app's path with ``app://``, eg if ``path = "../apps/traefik"``
-  then if ``extends = "app://docker0s-base.py"`` it will look for the base manifest at
-  ``../apps/traefik/docker0s-base.py``
-
-For security, when using a remote manifest from a third party git repository, we
-recommend performing a full audit of what you are going to deploy, and then pinning to
-that specific commit.
-
 
 .. _app_env:
 

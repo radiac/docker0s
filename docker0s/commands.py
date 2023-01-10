@@ -42,7 +42,7 @@ def cli(ctx, manifest: str | None = None):
 
     else:
         path_dir = Path.cwd()
-        manifest_path: Path | None = find_manifest(path_dir)
+        manifest_path = find_manifest(path_dir)
         if manifest_path is None:
             manifest_path = path_dir
 

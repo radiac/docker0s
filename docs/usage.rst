@@ -52,20 +52,20 @@ Specifying the manifest
 
 The host manifest can be set using ``d0s use`` - for example::
 
-    $ d0s use foo.yml --alias=foo
-    Manifest alias "foo" saved
-    Now using manifest foo.yml
-    $ d0s use bar.yml
-    Was using manifest foo.yml
-    Now using manifest bar.yml
-    $ d0s use foo
-    Was using manifest bar.yml
-    Was using manifest foo.yml
-    $ d0s use
-    Was using manifest foo.yml
-    Now using no manifest
-    $ d0s use --alias=foo
-    Manifest alias "foo" cleared
+    # Use foo.yml in the current dir and create an alias
+    d0s use foo.yml --alias=foo
+
+    # Swap tp to bar.yml
+    d0s use bar.yml
+
+    # Swap back to foo using the alias
+    d0s use foo
+
+    # Stop using a default
+    d0s use
+
+    # Clear the foo alias
+    d0s use --alias=foo
 
 This is saved to the docker0s user config, so will take effect across all active shell
 sessions, and will persist across sessions and reboots. In this way it is somewhat
