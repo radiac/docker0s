@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
+from contextlib import contextmanager
 from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
@@ -43,6 +44,7 @@ def mock_call(monkeypatch):
 
         def __enter__(self):
             monkeypatch.setattr(git, "call_or_die", self)
+            monkeypatch.setattr(git, "call", self)
             self.stack = []
             return self
 
@@ -131,12 +133,23 @@ def mock_fabric(monkeypatch):
             log_stack = self.log_stack = []
 
             class MockConnection:
-                def __init__(self, host: str, port: str | int, user: str):
+                def __init__(
+                    self,
+                    host: str,
+                    port: str | int,
+                    user: str,
+                    connect_kwargs: dict[str, Any] | None = None,
+                    forward_agent: bool | None = None,
+                ):
                     self.host = host
                     self.port = port
                     self.user = user
 
-                def run(self, cmd: str, env: dict[str, Any] | None) -> Result:
+                @contextmanager
+                def cd(self, dir: str):
+                    yield
+
+                def run(self, cmd: str, env: dict[str, Any] | None, **kwargs) -> Result:
                     log_stack.append(RunLog(cmd=cmd, env=env))
                     return Result(connection=self)
 

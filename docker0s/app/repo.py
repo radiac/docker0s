@@ -14,8 +14,7 @@ class RepoApp(BaseApp, abstract=True):
     A project which is in a git repository and needs to be cloned to the server and
     mounted into the container as a service
 
-    The ``repo`` must be a ``git+`` repository URL. It's assumed that the manifest will
-    be
+    The ``repo`` must be a ``git+`` repository URL.
     """
 
     #: ``git+`` URL for the repository to deploy
@@ -54,8 +53,8 @@ class RepoApp(BaseApp, abstract=True):
         return remote_path
 
     def deploy(self):
-        super().deploy()
         self.clone_on_host()
+        super().deploy()
 
     def clone_on_host(self):
         """

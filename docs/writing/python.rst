@@ -8,7 +8,7 @@ Python manifests
 
     class Website(RepoApp):
         # Clone a repo to the host and look for docker-compose.yml in there
-        path = "git+ssh://git@github.com:radiac/example.com.git@main"
+        repo = "git+ssh://git@github.com:radiac/example.com.git@main"
         env = {
             "DOMAIN": "example.radiac.net"
         }

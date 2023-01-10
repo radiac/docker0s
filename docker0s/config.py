@@ -1,9 +1,9 @@
+from __future__ import annotations
+
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import get_type_hints
-
-from typing_extensions import Self
 
 from .exceptions import DefinitionError, UsageError
 
@@ -15,7 +15,7 @@ class Config:
     manifest_alias: dict[str, str] = field(default_factory=dict)
 
     @classmethod
-    def load(cls: type[Self], path: Path) -> Self:
+    def load(cls, path: Path) -> Config:  # TODO: change to Self when supported
         with path.open("r") as file:
             raw_data = json.load(file)
 

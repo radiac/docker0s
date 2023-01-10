@@ -99,6 +99,13 @@ class BaseApp(ManifestObject, abstract=True):
     #: Default: ``docker-compose.jinja2``, then ``docker-compose.yml``
     compose: str | None = None
 
+    COMPOSE_DEFAULTS = [
+        "docker-compose.j2",
+        "docker-compose.jinja2",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+    ]
+
     #: Context for docker-compose Jinja2 template rendering
     #:
     #: To add instance data, override ``.get_compose_context``
@@ -229,7 +236,7 @@ class BaseApp(ManifestObject, abstract=True):
                 if not path.exists():
                     raise DefinitionError(
                         f'App setting {cls.get_name()}.{attr} specified as "{val}"'
-                        ' but "{path}" does not exist'
+                        f' but "{path}" does not exist'
                     )
                     break
                 return mro_cls._dir, val
@@ -301,13 +308,6 @@ class BaseApp(ManifestObject, abstract=True):
                 continue
             results.append((mro_cls, mro_cls.__dict__.get(attr, None)))
         return results
-
-    COMPOSE_DEFAULTS = [
-        "docker-compose.j2",
-        "docker-compose.yml",
-        "docker-compose.jinja2",
-        "docker-compose.yaml",
-    ]
 
     @classmethod
     def get_compose_path(cls) -> Path:
@@ -466,7 +466,6 @@ class BaseApp(ManifestObject, abstract=True):
         """
         Deploy the env file for this app
         """
-        print(f"Deploying {self} to {self.host}")
         self.push_compose_to_host()
         self.write_env_to_host()
         self.host.ensure_parent_path(self.remote_store)

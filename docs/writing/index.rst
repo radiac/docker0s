@@ -22,4 +22,5 @@ collection of app manifests and examples for how to use them with your host mani
    yaml
    python
    apps
+   host
    compose

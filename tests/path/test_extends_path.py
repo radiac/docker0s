@@ -169,7 +169,7 @@ def test_local__get_manifest_missing_in_dir__raises_exception(
             "git+https://github.com/radiac/docker0s#apps/foo/manifest.yml",
             {
                 "repo": "https://github.com/radiac/docker0s",
-                "ref": "",
+                "ref": None,
                 "path": "apps/foo/manifest.yml",
                 "name": None,
             },
@@ -178,7 +178,7 @@ def test_local__get_manifest_missing_in_dir__raises_exception(
             "git+https://github.com/radiac/docker0s::bar",
             {
                 "repo": "https://github.com/radiac/docker0s",
-                "ref": "",
+                "ref": None,
                 "path": "",
                 "name": "bar",
             },

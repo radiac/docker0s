@@ -20,8 +20,10 @@ class Host(ManifestObject, abstract=True):
     #: Server hostname
     name: str
 
-    #: Server port
-    port: str | int | None
+    #: Server SSH port
+    #:
+    #: Default: 22
+    port: str | int = 22
 
     #: Username for login
     user: str | None
@@ -37,6 +39,11 @@ class Host(ManifestObject, abstract=True):
     #: use tildes. See fabric docs for details:
     #: https://docs.fabfile.org/en/stable/api/transfer.html
     root_path: str = "apps"
+
+    #: Docker compose command
+    #:
+    #: Defaults to docker-compose, new installations may prefer ``docker compose``
+    compose_command: str = "docker-compose"
 
     # Internal connection handle
     _connection: Connection | None = None
@@ -107,6 +114,7 @@ class Host(ManifestObject, abstract=True):
                 warn=can_fail,
                 echo=verbose,
                 hide=False if verbose else "both",
+                pty=True,
             )
 
         if not result.ok and not can_fail:
@@ -130,7 +138,7 @@ class Host(ManifestObject, abstract=True):
         if cmd_args:
             args.update(cmd_args)
         self.exec(
-            cmd=f"docker-compose --file {{compose}} --env-file {{env}} {cmd}",
+            cmd=f"{self.compose_command} --file {{compose}} --env-file {{env}} {cmd}",
             args=args,
         )
 

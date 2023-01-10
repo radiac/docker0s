@@ -6,23 +6,23 @@
 #
 alabaster==0.7.12
     # via sphinx
-attrs==22.1.0
+attrs==22.2.0
     # via
     #   pytest
     #   pytest-mypy
-babel==2.10.3
+babel==2.11.0
     # via sphinx
 bcrypt==4.0.0
     # via
     #   -r ../requirements.txt
     #   paramiko
-black==22.8.0
+black==22.12.0
     # via pytest-black
 build==0.8.0
     # via
     #   -r ../requirements.txt
     #   pip-tools
-certifi==2022.6.15.1
+certifi==2022.12.7
     # via requests
 cffi==1.15.1
     # via
@@ -36,15 +36,15 @@ click==8.1.3
     #   -r ../requirements.txt
     #   black
     #   pip-tools
-colorama==0.4.5
+colorama==0.4.6
     # via sphinx-autobuild
-coverage[toml]==6.4.4
+coverage[toml]==7.0.4
     # via pytest-cov
 cryptography==38.0.0
     # via
     #   -r ../requirements.txt
     #   paramiko
-doc8==1.0.0
+doc8==1.1.1
     # via -r requirements.in
 docutils==0.19
     # via
@@ -52,33 +52,39 @@ docutils==0.19
     #   restructuredtext-lint
     #   sphinx
     #   sphinx-gitref
+exceptiongroup==1.1.0
+    # via pytest
 fabric==2.7.1
     # via -r ../requirements.txt
-filelock==3.8.0
+filelock==3.9.0
     # via pytest-mypy
-flake8==5.0.4
+flake8==6.0.0
     # via pytest-flake8
-idna==3.3
+idna==3.4
     # via requests
 imagesize==1.4.1
     # via sphinx
-iniconfig==1.1.1
+iniconfig==2.0.0
     # via pytest
 invoke==1.7.1
     # via
     #   -r ../requirements.txt
     #   fabric
-isort==5.10.1
+isort==5.11.4
     # via pytest-isort
 jinja2==3.1.2
-    # via sphinx
+    # via
+    #   -r ../requirements.txt
+    #   sphinx
 livereload==2.6.3
     # via sphinx-autobuild
 markupsafe==2.1.1
-    # via jinja2
+    # via
+    #   -r ../requirements.txt
+    #   jinja2
 mccabe==0.7.0
     # via flake8
-mypy==0.971
+mypy==0.991
     # via pytest-mypy
 mypy-extensions==0.4.3
     # via
@@ -98,9 +104,9 @@ pathlib2==2.3.7.post1
     # via
     #   -r ../requirements.txt
     #   fabric
-pathspec==0.10.1
+pathspec==0.10.3
     # via black
-pbr==5.10.0
+pbr==5.11.0
     # via stevedore
 pep517==0.13.0
     # via
@@ -108,21 +114,19 @@ pep517==0.13.0
     #   build
 pip-tools==6.8.0
     # via -r ../requirements.txt
-platformdirs==2.5.2
+platformdirs==2.6.2
     # via black
 pluggy==1.0.0
     # via pytest
-py==1.11.0
-    # via pytest
-pycodestyle==2.9.1
+pycodestyle==2.10.0
     # via flake8
 pycparser==2.21
     # via
     #   -r ../requirements.txt
     #   cffi
-pyflakes==2.5.0
+pyflakes==3.0.1
     # via flake8
-pygments==2.13.0
+pygments==2.14.0
     # via
     #   doc8
     #   sphinx
@@ -134,7 +138,7 @@ pyparsing==3.0.9
     # via
     #   -r ../requirements.txt
     #   packaging
-pytest==7.1.3
+pytest==7.2.0
     # via
     #   -r requirements.in
     #   pytest-asyncio
@@ -143,21 +147,21 @@ pytest==7.1.3
     #   pytest-flake8
     #   pytest-isort
     #   pytest-mypy
-pytest-asyncio==0.19.0
+pytest-asyncio==0.20.3
     # via -r requirements.in
 pytest-black==0.3.12
     # via -r requirements.in
-pytest-cov==3.0.0
+pytest-cov==4.0.0
     # via -r requirements.in
 pytest-flake8==1.1.1
     # via -r requirements.in
-pytest-isort==3.0.0
+pytest-isort==3.1.0
     # via -r requirements.in
-pytest-mypy==0.9.1
+pytest-mypy==0.10.3
     # via -r requirements.in
 python-dotenv==0.21.0
     # via -r ../requirements.txt
-pytz==2022.2.1
+pytz==2022.7
     # via babel
 pyyaml==6.0
     # via -r ../requirements.txt
@@ -173,7 +177,7 @@ six==1.16.0
     #   pathlib2
 snowballstemmer==2.2.0
     # via sphinx
-sphinx==5.1.1
+sphinx==6.1.2
     # via
     #   -r requirements.in
     #   sphinx-autobuild
@@ -182,7 +186,7 @@ sphinx-autobuild==2021.3.14
     # via -r requirements.in
 sphinx-gitref==0.2.1
     # via -r requirements.in
-sphinxcontrib-applehelp==1.0.2
+sphinxcontrib-applehelp==1.0.3
     # via sphinx
 sphinxcontrib-devhelp==1.0.2
     # via sphinx
@@ -194,7 +198,7 @@ sphinxcontrib-qthelp==1.0.3
     # via sphinx
 sphinxcontrib-serializinghtml==1.1.5
     # via sphinx
-stevedore==4.0.0
+stevedore==4.1.1
     # via doc8
 toml==0.10.2
     # via pytest-black
@@ -210,11 +214,11 @@ tomli==2.0.1
     #   pytest
 tornado==6.2
     # via livereload
-types-pyyaml==6.0.11
+types-pyyaml==6.0.12.2
     # via -r requirements.in
-typing-extensions==4.3.0
+typing-extensions==4.4.0
     # via mypy
-urllib3==1.26.12
+urllib3==1.26.13
     # via requests
 wheel==0.37.1
     # via

@@ -44,15 +44,20 @@ def test_mocked_app__deploy(mock_fabric, app, compose_path_yml):
         app.deploy()
 
     assert mocked.flat_stack == [
-        ("run", "mkdir -p apps/sample_app", None),
-        (
-            "put",
-            mocked.StringIO('COMPOSE_PROJECT_NAME="sample_app"'),
-            "apps/sample_app/env",
-        ),
+        ("run", "mkdir -p /home/user/apps/sample_app", None),
         (
             "put",
             mocked.StringIO(compose_path_yml.read_text()),
-            "apps/sample_app/docker-compose.yml",
+            "/home/user/apps/sample_app/docker-compose.yml",
+        ),
+        (
+            "put",
+            mocked.StringIO(
+                'COMPOSE_PROJECT_NAME="sample_app"\n'
+                'ENV_FILE="/home/user/apps/sample_app/env"\n'
+                'ASSETS_PATH="/home/user/apps/sample_app/assets"\n'
+                'STORE_PATH="/home/user/apps/sample_app/store"'
+            ),
+            "/home/user/apps/sample_app/env",
         ),
     ]
