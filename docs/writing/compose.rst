@@ -41,6 +41,8 @@ Example usage in your ``docker-compose.yml``:
         - "${ASSET_PATH}/scripts:/scripts"
 
 
+.. _compose_templates:
+
 Compose templates
 =================
 
@@ -51,8 +53,27 @@ for details of the template syntax.
 The template will be able to reference other documents relative to it, regardless of
 whether it is a local file or a remote file on a ``git+...`` url.
 
-The template is rendered with the context dict provided in ``compose_context``, plus the
-following values:
+An app can specify a ``compose_context`` dict to extend the template context. This will
+be merged into and override the default values below. If the app extends one or more
+base apps, each ``compose_context`` will be merged into the context in order.
+
+
+Context vs environment variables
+--------------------------------
+
+Context variables should be used for customising and extending a docker-compose file, eg
+boolean flags to turn features on and off, strings to add volumes or labels etc.
+Anything in a context variable will be hard-coded into the docker-compose file pushed to
+the host.
+
+Environment variables should be used to configure values within the docker-compose file,
+eg secrets, paths, hostnames etc.
+
+
+Defaults
+--------
+
+The template context will have these defaults:
 
 ``host``
   A reference to the instantiated Host object.
@@ -108,3 +129,4 @@ following values:
   Reserved for future use.
 
 Take care not to use these variables in your own ``compose_context``.
+

@@ -32,9 +32,9 @@ manifests separate to aid reusability:
         host_name/
           d0s-manifest.yml
 
-You do not have to follow this structure, and if you are just deploying off-the-shelf
-app manifests then you can configure it all from a single manifest file if you would
-prefer.
+You do not have to follow this structure. For example, you may prefer to store your app
+manifests with the code for those projects and load them directly from a git repo, or to
+deploy off-the-shelf app manifests from a single host manifest.
 
 
 Host preparation

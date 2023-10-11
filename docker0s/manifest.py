@@ -16,6 +16,8 @@ from .app.names import normalise_name
 from .exceptions import DefinitionError, UsageError
 from .host import Host
 from .path import path_to_uuid
+from .reporter import reporter
+from .workers import pool
 
 
 class Manifest:
@@ -50,32 +52,40 @@ class Manifest:
 
         * Load base manifests for any apps which define an ``extends``
         """
-        for app in self.apps:
-            app.apply_base_manifest(history=history)
+        with pool.session() as session:
+            for app in self.apps:
+                session.submit(app.apply_base_manifest, history=history)
 
     @classmethod
-    def load(cls, path: Path, history: list[Path] | None = None) -> Manifest:
-        if not path.exists():
-            raise DefinitionError(f"Cannot load {path} - file not found")
+    def load(
+        cls, path: Path, history: list[Path] | None = None, label: str | None = None
+    ) -> Manifest:
+        label = f"{f'for {label} ' if label else ''}from {path}"
+        with reporter.task(f"Loading manifest {label}") as task:
+            if not path.exists():
+                raise DefinitionError(f"Cannot load manifest {label} - file not found")
 
-        if history is None:
-            history = []
-        if path in history:
-            raise DefinitionError(f"Cannot load {path} - recursive extends detected")
-        history.append(path)
+            if history is None:
+                history = []
+            if path in history:
+                raise DefinitionError(
+                    f"Cannot load manifest {label} - recursive extends detected"
+                )
+            history.append(path)
 
-        # Load manifest
-        filetype = path.suffix.lower()
-        if filetype == ".py":
-            manifest = cls.load_py(path)
-        elif filetype == ".yml":
-            manifest = cls.load_yml(path)
-        else:
-            raise DefinitionError(
-                f"Manifest {path} filetype invalid - must be .yml or .py"
-            )
-
-        manifest.prepare(history)
+            # Load manifest
+            filetype = path.suffix.lower()
+            if filetype == ".py":
+                manifest = cls.load_py(path)
+            elif filetype == ".yml":
+                manifest = cls.load_yml(path)
+            else:
+                raise DefinitionError(
+                    f"Manifest {label} filetype invalid - must be .yml or .py"
+                )
+            task.update(f"Processing manifest {label}")
+            manifest.prepare(history)
+        reporter.debug(f"Loaded manifest {label}")
         return manifest
 
     @classmethod

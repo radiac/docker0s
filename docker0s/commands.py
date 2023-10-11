@@ -1,14 +1,17 @@
+import sys
 from functools import update_wrapper
+from os import getenv
 from pathlib import Path
 
 import click
 
 from .app import BaseApp
 from .app.names import normalise_name
-from .config import Config
+from .config import config
 from .exceptions import Docker0sException, UsageError
 from .manifest import Manifest
 from .path import find_manifest
+from .reporter import reporter
 
 
 class ExceptionHandlerGroup(click.Group):
@@ -16,47 +19,32 @@ class ExceptionHandlerGroup(click.Group):
         try:
             return self.main(*args, **kwargs)
         except Docker0sException as e:
-            click.echo(e, err=True)
+            reporter.error(str(e))
+            reporter.error("Operation failed.")
+            sys.exit(1)
 
 
 @click.group(cls=ExceptionHandlerGroup)
+@click.option("--config", "-c", "config_path")
 @click.option("--manifest", "-m")
+@click.option("--debug/--no-debug", "-d", is_flag=True)
 @click.pass_context
-def cli(ctx, manifest: str | None = None):
+def cli(
+    ctx,
+    config_path: str | None = None,
+    manifest: str | None = None,
+    debug: str | None = None,
+):
     ctx.ensure_object(dict)
 
     # Load config
-    config_path = Path(click.get_app_dir("docker0s")) / "config.json"
-    if config_path.exists():
-        config = Config.load(config_path)
-    else:
-        config = Config(path=config_path)
-
-    # Get manifest path
-    manifest_path: Path | None = None
-    if manifest:
-        manifest_path = Path(manifest)
-
-    elif config.manifest_path:
-        manifest_path = Path(config.manifest_path)
-
-    else:
-        path_dir = Path.cwd()
-        manifest_path = find_manifest(path_dir)
-        if manifest_path is None:
-            manifest_path = path_dir
-
-    # Try to load manifest
-    if manifest_path and manifest_path.is_file():
-        manifest_obj = Manifest.load(manifest_path)
-    else:
-        manifest_obj = None
+    with reporter.task("Loading config"):
+        config.load(path=config_path, debug=debug)
+    reporter.debug(f"Loaded config from {config.path}")
 
     ctx.obj.update(
         {
-            "config": config,
-            "manifest": manifest_obj,
-            "manifest_path": manifest_path,
+            "manifest_raw": manifest,
         }
     )
 
@@ -64,12 +52,37 @@ def cli(ctx, manifest: str | None = None):
 def with_manifest(f):
     @click.pass_context
     def new_func(ctx, *args, **kwargs):
-        manifest = ctx.obj["manifest"]
-        manifest_path = ctx.obj["manifest_path"]
-        if manifest is None:
-            raise UsageError(f"Manifest not found at {manifest_path}")
-        print(f"Using manifest {manifest_path}")
+        # Get global context vars
+        manifest_raw = ctx.obj.get("manifest_raw") or getenv("DOCKER0S_MANIFEST")
 
+        # Get manifest path
+        with reporter.task("Finding host manifest"):
+            manifest_path: Path | None = None
+            if manifest_raw:
+                manifest_path = Path(manifest_raw)
+
+            elif config.manifest_path:
+                manifest_path = Path(config.manifest_path)
+
+            else:
+                path_dir = Path.cwd()
+                manifest_path = find_manifest(path_dir)
+                if manifest_path is None:
+                    manifest_path = path_dir
+
+        if not manifest_path.is_file():
+            raise UsageError(f"Manifest not found at {manifest_path}")
+        reporter.debug(f"Using manifest at {manifest_path}")
+
+        # Try to load manifest
+        manifest = Manifest.load(manifest_path, label="host")
+
+        ctx.obj.update(
+            {
+                "manifest": manifest,
+                "manifest_path": manifest_path,
+            }
+        )
         return ctx.invoke(f, ctx.obj["manifest"], *args, **kwargs)
 
     return update_wrapper(new_func, f)
@@ -141,7 +154,7 @@ class TargetManager:
             bound_app: BaseApp = self.app_lookup[target.app]
             if bound_app in self.service_lookup:
                 if len(self.service_lookup[bound_app]) == 0:
-                    raise UsageError(
+                    return UsageError(
                         f"Cannot target mix of app {target.app} and service {target}"
                     )
             else:
@@ -168,15 +181,13 @@ def use(ctx, manifest: str = "", alias: str = "", list_alias: bool = False):
     """
     Set a manifest as the default
     """
-    config = ctx.obj["config"]
-
     if list_alias:
         if not config.manifest_alias:
-            print("No aliases defined")
+            reporter.print("No aliases defined")
         else:
-            print("Available aliases:")
+            reporter.print("Available aliases:")
             for alias, path in sorted(config.manifest_alias.items()):
-                print(f"  {alias}: {path}")
+                reporter.print(f"  {alias}: {path}")
         return
 
     if manifest:
@@ -190,27 +201,31 @@ def use(ctx, manifest: str = "", alias: str = "", list_alias: bool = False):
         manifest = str(manifest_path)
         if not manifest_path.is_file():
             raise UsageError(f"Manifest {manifest} not found")
-        Manifest.load(manifest_path)
+
+        Manifest.load(manifest_path, label="host")
 
     # Update config
     if config.manifest_path:
-        print(f"Was using manifest {config.manifest_path}")
+        reporter.print(f"Was using manifest {config.manifest_path}")
 
     # Save new manifest
     config.manifest_path = manifest
     if alias:
         if manifest:
             config.manifest_alias[alias] = manifest
-            print(f'Manifest alias "{alias}" saved')
+            reporter.print(f'Manifest alias "{alias}" saved')
         else:
             config.manifest_alias.pop(alias, None)
-            print(f'Manifest alias "{alias}" cleared')
+            reporter.print(f'Manifest alias "{alias}" cleared')
     config.save()
 
     if manifest:
-        print(f"Now using manifest {manifest}")
+        reporter.print(f"Now using manifest {manifest}")
     else:
-        print("Now using no manifest")
+        reporter.print("Now using no manifest")
+
+
+from rich.table import Table
 
 
 @cli.command()
@@ -222,12 +237,19 @@ def ls(manifest: Manifest):
     Usage:
         docker0s ls
     """
+    table = Table(show_header=False, show_lines=True)
+    table.add_column("Category", style="bold", no_wrap=True)
+    table.add_column("Details")
+
+    table.add_row("Manifest", str(manifest.path))
     if manifest.host:
-        print(f"Host: {manifest.host()}")
-    print("Apps:")
+        table.add_row("Host", str(manifest.host()))
+
     app: type[BaseApp]
-    for app in manifest.apps:
-        print(f"  {app.get_name()}")
+    app_names = [app.get_docker_name() for app in manifest.apps]
+    table.add_row("Apps", "\n".join(app_names))
+
+    reporter.print(table)
 
 
 @cli.command()
@@ -249,7 +271,9 @@ def deploy(manifest: Manifest, apps: tuple[str], all_flag: bool = False):
     safe_apps = (normalise_name(app_name) for app_name in apps)
     bound_apps = manifest.init_apps(*safe_apps)
     for app in bound_apps:
+        reporter.debug(f"Deploying {app.get_docker_name()}")
         app.deploy()
+        reporter.debug(f"Deployed {app.get_docker_name()}")
 
 
 @cli.command()
@@ -270,7 +294,9 @@ def up(manifest: Manifest, targets: tuple[Target, ...], all_flag: bool = False):
 
     manager = TargetManager(manifest, targets)
     for app, services in manager.get_app_services():
+        reporter.debug(f"Bringing up {app.get_docker_name()} {services=}")
         app.up(*services)
+        reporter.debug(f"Brought up {app.get_docker_name()} {services=}")
 
 
 @cli.command()
@@ -283,7 +309,9 @@ def down(manifest: Manifest, targets: tuple[Target, ...], all_flag: bool = False
 
     manager = TargetManager(manifest, targets)
     for app, services in manager.get_app_services():
+        reporter.debug(f"Taking down {app.get_docker_name()} {services=}")
         app.down(*services)
+        reporter.debug(f"Took down {app.get_docker_name()} {services=}")
 
 
 @cli.command()
@@ -296,7 +324,9 @@ def restart(manifest: Manifest, targets: tuple[Target, ...], all_flag: bool = Fa
 
     manager = TargetManager(manifest, targets)
     for app, services in manager.get_app_services():
+        reporter.debug(f"Restarting {app.get_docker_name()} {services=}")
         app.restart(*services)
+        reporter.debug(f"Restarted {app.get_docker_name()} {services=}")
 
 
 @cli.command()
@@ -307,7 +337,9 @@ def exec(manifest: Manifest, target: Target, command: str):
     if not target.service:
         raise UsageError("Must specify an app.service target")
     app = manifest.init_apps(target.app)[0]
+    reporter.debug(f"Executing remote command in {target.app}.{target.service}")
     app.exec(service=target.service, command=command)
+    reporter.debug(f"Execution complete")
 
 
 @cli.command()
@@ -317,8 +349,9 @@ def status(manifest: Manifest):
         raise UsageError("No host found in manifest")
 
     host = manifest.init_host()
+    reporter.debug("Retrieving status")
     result = host.exec(cmd="docker ps --all", verbose=False)
-    print(result.stdout)
+    reporter.print(result.stdout)
 
 
 @cli.command()
@@ -327,6 +360,7 @@ def status(manifest: Manifest):
 def logs(manifest: Manifest, target: Target):
     if not target.service:
         raise UsageError("Must specify an app.service target")
+    reporter.debug("Retrieving logs")
     app = manifest.init_apps(target.app)[0]
     app.logs(service=target.service)
 
@@ -340,6 +374,7 @@ def cmd(manifest: Manifest, target: Target, command: str, arguments: list[str]):
     if target.service:
         raise UsageError("Must specify an app target, not an app.service")
     app = manifest.init_apps(target.app)[0]
+    reporter.debug(f"Running local command {target} {command}")
     cmd_fn = app.get_command(command)
     cmd_fn(*arguments)
 

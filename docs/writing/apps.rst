@@ -63,15 +63,15 @@ Attributes:
 
 ``env_file``
   Path or list of paths to files containing environment variables for docker-compose.
-  See "Environment variables" below for details.
+  See :ref:`Environment variables <app_env>` below for details.
 
 ``env``
   Key-value pairs of environment variables for docker-compose.
-  See "Environment variables" below for details.
+  See :ref:`Environment variables <app_env>` below for details.
 
 ``compose_context``
   Key-value pairs of template variables to render a Jinja2 ``compose`` template.
-  See "Compose templates" below for details.
+  See :ref:`Compose templates <compose_templates>`_ for details.
 
 Example YAML:
 
@@ -159,6 +159,7 @@ YAML can use any - these four app definitions are equivalent (so would raise an 
         path: ../website
       WebsiteExampleCom:
         path: ../website
+
 
 .. _app_env:
 

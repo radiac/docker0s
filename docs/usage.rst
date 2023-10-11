@@ -34,8 +34,8 @@ Docker0s installs as ``docker0s`` and ``d0s`` for short
 ``docker0s cmd <app> <command> [<args> ...]``
   Execute a local App command
 
-``docker0s use [<manifest|alias>] [--alias=<alias>]``
-  Set or unset the default host manifest by either path or an alias.
+``docker0s use [<file|alias>] [--alias=<alias>]``
+  Set or unset the default host manifest, by either file path or an alias.
 
 ``docker0s use --list``
   List aliases.
@@ -43,14 +43,55 @@ Docker0s installs as ``docker0s`` and ``d0s`` for short
 
 Options:
 
+``--config=<file>``, ``-c <file>``:
+  Specify the config file to use. Defaults to the ``docker0s/config.json`` in the app
+  dir, in Linux usually ``~/.config/docker0s/config.json``.
+
 ``--manifest=<file>``, ``-m <file>``:
-  Specify the manifest for this command. Overrides the default manifest.
+  Specify the manifest for this command.
+  For defaults and more info, see `Specifying the manifest`_.
+
+``--debug`` or ``-no-debug``:
+  Turn on or off debug messages.
+
+
+Environment variables:
+
+``DOCKER0S_CONFIG=<file>``
+  Specify the config file to use. See ``--config`` option for defaults.
+
+``DOCKER0S_MANIFEST=<file>``
+  Specify the manifest to use.
+  For defaults and more info, see `Specifying the manifest`_.
+
+``DOCKER0S_DEBUG=true``
+  Enable debug messages by setting this to ``true``. If debugging is turned on in the
+  config file, you can turn it off again by setting this to ``false``, ``no`` or
+  ``off``.
+
+.. note::
+
+  Where a setting is configured by more than one method, the first found wins. They are
+  checked in the order: command line options, then environment variables, then values in
+  the config file.
 
 
 Specifying the manifest
 -----------------------
 
-The host manifest can be set using ``d0s use`` - for example::
+If no manifest is specified, docker0s looks in the current directory for
+``d0s-manifest.py`` then ``d0s-manifest.yml``.
+
+The manifest can be specified for each command with the ``--manifest`` option::
+
+    $ d0s --manifest=baz.yml ls
+
+or for a shell session using the ``DOCKER0S_MANIFEST`` environment variable::
+
+    $ export DOCKER0S_MANIFEST="/path/to/baz.yml"
+    $ d0s ls
+
+The host manifest can also be set across sessions using ``d0s use`` - for example::
 
     # Use foo.yml in the current dir and create an alias
     d0s use foo.yml --alias=foo
@@ -68,18 +109,10 @@ The host manifest can be set using ``d0s use`` - for example::
     d0s use --alias=foo
 
 This is saved to the docker0s user config, so will take effect across all active shell
-sessions, and will persist across sessions and reboots. In this way it is somewhat
-similar to ``kubectl config use-context``.
+sessions, and will persist across sessions and reboots.
 
 The config stores full paths, so aliases can be used to jump between manifests without
 needing to specify the full path.
-
-The manifest can also be set for each command with the ``--manifest`` option::
-
-    $ d0s --manifest=baz.yml ls
-
-If no manifest is specified, docker0s looks in the current directory for
-``d0s-manifest.py`` then ``d0s-manifest.yml``.
 
 
 Deployment

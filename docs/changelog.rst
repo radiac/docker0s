@@ -5,6 +5,17 @@ Changelog
 Changes
 =======
 
+2.1.0 -
+------------------
+
+Features:
+
+* Merge ``compose_context`` from base apps so that newest key wins, rather than
+  overwriting all keys.
+* Add progress reporting, logging, and report pretty-printing
+* Add thread pool for parallel manifest loading
+
+
 2.0.0 - 2022-01-10
 ------------------
 

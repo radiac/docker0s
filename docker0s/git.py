@@ -12,6 +12,7 @@ from pathlib import Path, PosixPath
 from typing import TYPE_CHECKING
 
 from .exceptions import DefinitionError, ExecutionError
+from .reporter import reporter
 from .settings import CACHE_PATH
 
 
@@ -69,15 +70,16 @@ def call(
     cwd: Path | None = None,
 ) -> subprocess.CompletedProcess:
     # This specific invocation will allow git to use the system's ssh agent
-    result = subprocess.run(
-        shlex.join(cmd),
-        cwd=cwd,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        shell=True,
-        start_new_session=True,
-    )
+    with reporter.interactive():
+        result = subprocess.run(
+            shlex.join(cmd),
+            cwd=cwd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+            start_new_session=True,
+        )
     return result
 
 

@@ -11,6 +11,7 @@ from ..exceptions import DefinitionError
 from ..host import Host
 from ..manifest_object import ManifestObject
 from ..path import ExtendsPath
+from ..reporter import reporter
 from ..settings import DIR_ASSETS, FILENAME_COMPOSE, FILENAME_ENV
 from .names import normalise_name, pascal_to_snake
 
@@ -200,16 +201,19 @@ class BaseApp(ManifestObject, abstract=True):
         if not cls.extends:
             return
 
-        if not cls._extends_path:
-            cls._extends_path = ExtendsPath(cls.extends, cls._dir)
+        base_name = (
+            cls._extends_path.name if cls._extends_path else None
+        ) or cls.get_name()
+        with reporter.task(f"Getting base manifest for {base_name} from {cls.extends}"):
+            if not cls._extends_path:
+                cls._extends_path = ExtendsPath(cls.extends, cls._dir)
 
-        path = cls._extends_path.get_manifest()
+            path = cls._extends_path.get_manifest()
 
-        base_manifest = Manifest.load(path, history)
+        base_manifest = Manifest.load(path, history, label=base_name)
         if base_manifest.host is not None:
             raise DefinitionError("A base manifest cannot define a host")
 
-        base_name = cls._extends_path.name or cls.get_name()
         base_app = base_manifest.get_app(base_name)
         if base_app is None:
             raise DefinitionError(
@@ -408,7 +412,10 @@ class BaseApp(ManifestObject, abstract=True):
     def get_compose_context(self, **kwargs: Any) -> dict[str, Any]:
         """
         Build the template context for the compose template
+
+        Context dictionaries are merged
         """
+        # Defaults
         context = {
             "host": self.host,
             "env": EnvTemplateContext(self),
@@ -416,11 +423,18 @@ class BaseApp(ManifestObject, abstract=True):
             # Reserved for future expansion
             "docker0s": NotImplemented,
             "globals": NotImplemented,
-            **kwargs,
         }
 
-        if self.compose_context is not None:
-            context.update(self.compose_context)
+        # Collect ``compose_context`` from base classes and merge in order
+        cls_contexts: list[tuple[type[BaseApp], Any]] = self.collect_attr(
+            "compose_context"
+        )
+        for _, cls_context in reversed(cls_contexts):
+            if cls_context:
+                context.update(cls_context)
+
+        # Add overrides
+        context.update(**kwargs)
 
         return context
 

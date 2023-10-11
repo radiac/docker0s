@@ -61,3 +61,30 @@ This can then be called as:
     ./docker0s cmd website say_hello person
 
 Commands currently do not have any support for validation or typing of arguments.
+
+
+Reporter
+~~~~~~~~
+
+App definitions can use the ``docker0s.reporter`` module to help display output. It is
+a convenience wrapper around ``rich``, with helpers for status/progress tasks, prompts
+and panels.
+
+Example usage::
+
+    from docker0s.reporter import reporter
+
+    reporter.debug("Debug message only visible with --debug")
+    reporter.print("Message seen by all")
+    reporter.warn("Display a warning in bold yellow")
+    reporter.error("Display an error in bold red")
+    if not lucky:
+        raise reporter.error("Display error and exit")
+
+    with reporter.task("Something is happening") as task:
+        time.sleep(1)
+        task.update("Still happening")
+        time.sleep(1)
+
+    password = reporter.prompt("Enter password", password=True)
+    reporter.panel("Message in a panel")
