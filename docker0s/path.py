@@ -6,6 +6,7 @@ from typing import Any
 
 from .exceptions import DefinitionError
 from .git import fetch_repo, parse_git_url
+from .lock import AppLock
 
 
 def find_manifest(path: Path) -> Path | None:
@@ -62,6 +63,9 @@ class ExtendsPath:
     #: Full ``extends`` path to the manifest, or dir containing a d0s-manifest
     path: Path
 
+    #: Lock object for this base path
+    lock: AppLock
+
     #: Git repository
     repo: str | None = None
     ref: str | None = None
@@ -69,16 +73,20 @@ class ExtendsPath:
     #: App name within the manifest
     name: str | None = None
 
-    def __init__(self, path: str, cwd: Path):
+    def __init__(self, path: str, cwd: Path, lock: AppLock):
         """
         Resolve the path to a local Path, retrieving a local copy if a remote source
         """
         self.original = path
         self.cwd = cwd
+        self.lock = lock
 
         if path.startswith(("git+ssh://", "git+https://")):
             # Break up URL into parts
             self.repo, self.ref, repo_rel_path, self.name = parse_git_url(path)
+
+            # Check the lock
+            self.lock.assert_ok(self.repo, self.ref):
 
             # Pull and build local path
             repo_local_path = self._pull_repo()
@@ -95,7 +103,7 @@ class ExtendsPath:
                 )
         else:
             if "::" in path:
-                path, self.name = path.split("::")
+                path, self.name = path.split("::", 1)
             self.path = (self.cwd / path).resolve()
 
     def __truediv__(self, other: Any) -> Path:
@@ -108,7 +116,7 @@ class ExtendsPath:
         """
         Clone local copy of repo
         """
-        local_path: Path = fetch_repo(self.repo, self.ref)
+        local_path: Path = fetch_repo(url=self.repo, ref=self.ref)
         return local_path
 
     def get_manifest(self) -> Path:

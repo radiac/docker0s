@@ -18,6 +18,14 @@ class UsageError(Docker0sException):
     pass
 
 
+class LockError(Docker0sException):
+    """
+    A problem with the lock state
+    """
+
+    pass
+
+
 class ExecutionError(Docker0sException):
     """
     A problem when trying to perform an action

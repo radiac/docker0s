@@ -10,7 +10,7 @@ Environment variables
 You can pass your own environment variables into your docker-compose file - for more
 details see :ref:`app_env`.
 
-A standard docker0s app provides the following environment variables:
+A standard docker0s app provides the following environment variables for docker compose:
 
 ``ENV_FILE``
   Path to the combined env file on the host

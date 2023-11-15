@@ -1,20 +1,15 @@
 from __future__ import annotations
 
-from functools import wraps
+import sys
+from functools import cached_property
+from threading import Thread
 from typing import TYPE_CHECKING
 
 from click import Abort
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-)
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.prompt import Prompt
-from rich.status import Status
 
 
 if TYPE_CHECKING:
@@ -45,29 +40,6 @@ class ProgressTask:
         self.reporter.progress.update(self.task_id, description=description)
 
 
-class ProgressHider:
-    reporter: Reporter
-
-    def __init__(self, reporter):
-        self.reporter = reporter
-
-    def __enter__(self):
-        self.reporter.progress.stop()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.reporter.progress.start()
-
-    def __call__(self, fn):
-        @wraps(fn)
-        def decorator(*args, **kwargs):
-            with self:
-                result = fn(*args, **kwargs)
-            return result
-
-        return decorator
-
-
 class Reporter:
     """
     Report status and log messages
@@ -77,7 +49,6 @@ class Reporter:
 
     console: Console
     progress: Progress
-    can_debug: bool = False
 
     def __init__(self):
         self.console = Console()
@@ -87,8 +58,16 @@ class Reporter:
             TextColumn("{task.description}"),
             console=self.console,
             transient=True,
+            redirect_stdout=True,
+            redirect_stderr=True,
         )
         self.progress.start()
+
+    @cached_property
+    def can_debug(self):
+        from .config import settings
+
+        return settings.DEBUG
 
     def print(self, msg: RenderableType):
         """
@@ -107,6 +86,10 @@ class Reporter:
     def debug(self, msg: RenderableType):
         """
         Display a debug note. This will usually not be shown to the user.
+
+        Note: settings.DEBUG is detected the first time debug() is called. If the
+        settings change after that, you'll need to ``del reporter.can_debug`` before
+        calling this again.
         """
         if self.can_debug:
             self.console.print(msg)
@@ -130,6 +113,12 @@ class Reporter:
         self.console.print(msg, style="red bold")
         return ReporterError(msg)
 
+    def print_exception(self):
+        if self.can_debug:
+            self.console.print_exception(show_locals=True)
+        else:
+            self.print("Traceback suppressed, run with --debug to see")
+
     def task(self, description: str, total=None) -> ProgressTask:
         """
         Add a task to the progress indicator.
@@ -147,28 +136,11 @@ class Reporter:
 
         return ProgressTask(self, task_id)
 
-    def interactive(self) -> ProgressHider:
-        """
-        Context manager and decorator to enter interactive mode - temporarily disable
-        the progress display
-
-        Usage::
-
-            with reporter.interactive():
-                ...
-
-            @reporter.interactive()
-            def something():
-                ...
-        """
-        return ProgressHider(self)
-
     def prompt(self, prompt, *, password=False) -> str:
         """
         Prompt the user for input
         """
-        with self.interactive():
-            response = Prompt.ask(prompt, console=self.console, password=password)
+        response = Prompt.ask(prompt, console=self.console, password=password)
         return response
 
     def panel(self, msg: RenderableType):
@@ -179,3 +151,37 @@ class Reporter:
 
 
 reporter = Reporter()
+
+
+class ReportingThread(Thread):
+    """
+    A thread which logs and reports exceptions
+
+    Usage::
+
+        thread.join()
+        if thread.exception:
+            raise reporter.error("Thread failed")
+    """
+
+    exception: Exception | None
+
+    def __init__(self, *args, terminating=False, **kwargs):
+        """
+        Args:
+
+            terminating (bool): If an exception occurs, terminate the program
+        """
+        super().__init__(*args, **kwargs)
+        self.terminating = terminating
+        self.exception = None
+
+    def run(self, *args, **kwargs):
+        try:
+            super().run(*args, **kwargs)
+        except Exception as e:
+            self.exception = e
+            reporter.error(f"Thread experienced an exception: {e}")
+            reporter.print_exception()
+            if self.terminating:
+                sys.exit(1)

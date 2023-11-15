@@ -13,23 +13,32 @@ import yaml
 
 from .app import App, BaseApp, abstract_app_registry
 from .app.names import normalise_name
+from .config import LOCKFILE_SUFFIX, settings
 from .exceptions import DefinitionError, UsageError
 from .host import Host
+from .lock import Lockfile
 from .path import path_to_uuid
 from .reporter import reporter
-from .workers import pool
+from .workers import Workers
 
 
 class Manifest:
     path: Path
+    origin: str
     apps: list[type[BaseApp]]
     app_lookup: dict[str, type[BaseApp]]
+    lockfile: Lockfile
     host: type[Host] | None = None
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, origin: str | None = None):
         self.path = path
+        self.origin = origin or ""
         self.apps: list[type[BaseApp]] = []
         self.app_lookup: dict[str, type[BaseApp]] = {}
+
+        # Load lockfile for bases
+        lockfile_path = self.get_lockfile_path()
+        self.lockfile = Lockfile.load(lockfile_path)
 
     def __str__(self) -> str:
         return str(self.path)
@@ -37,6 +46,7 @@ class Manifest:
     def add_app(self, app: type[BaseApp]) -> None:
         self.apps.append(app)
         self.app_lookup[app.__name__] = app
+        app.manifest = self
 
     def has_app(self, name: str) -> bool:
         return name in self.app_lookup
@@ -48,17 +58,27 @@ class Manifest:
 
     def prepare(self, history: list[Path]):
         """
-        Prepare apps and host for use
+        Prepare manifest after initialisation - prepare apps and host for use
 
         * Load base manifests for any apps which define an ``extends``
         """
-        with pool.session() as session:
+        with Workers() as session:
             for app in self.apps:
-                session.submit(app.apply_base_manifest, history=history)
+                # Check for a lock
+                lock = self.lockfile.get_app_lock(app)
+                session.submit(
+                    app.apply_base_manifest,
+                    lock=lock,
+                    history=history,
+                )
 
     @classmethod
     def load(
-        cls, path: Path, history: list[Path] | None = None, label: str | None = None
+        cls,
+        path: Path,
+        history: list[Path] | None = None,
+        label: str | None = None,
+        origin: str | None = None,
     ) -> Manifest:
         label = f"{f'for {label} ' if label else ''}from {path}"
         with reporter.task(f"Loading manifest {label}") as task:
@@ -73,23 +93,25 @@ class Manifest:
                 )
             history.append(path)
 
-            # Load manifest
+            # Load manifest (and its lockfile if present)
             filetype = path.suffix.lower()
             if filetype == ".py":
-                manifest = cls.load_py(path)
+                manifest = cls.load_py(path, origin=origin)
             elif filetype == ".yml":
-                manifest = cls.load_yml(path)
+                manifest = cls.load_yml(path, origin=origin)
             else:
                 raise DefinitionError(
                     f"Manifest {label} filetype invalid - must be .yml or .py"
                 )
+
+            # Process manifest, load bases
             task.update(f"Processing manifest {label}")
             manifest.prepare(history)
         reporter.debug(f"Loaded manifest {label}")
         return manifest
 
     @classmethod
-    def load_py(cls, path: Path) -> Manifest:
+    def load_py(cls, path: Path, origin: str | None = None) -> Manifest:
         # Load module
         module = SourceFileLoader(
             f"docker0s.manifest.loaded.{path_to_uuid(path)}",
@@ -99,7 +121,7 @@ class Manifest:
         sys.modules[module.__name__] = module
 
         # Collect apps and hosts
-        manifest = Manifest(path)
+        manifest = Manifest(path, origin=origin)
         for obj in module.__dict__.values():
             if not isclass(obj):
                 continue
@@ -115,7 +137,7 @@ class Manifest:
         return manifest
 
     @classmethod
-    def load_yml(cls, path: Path) -> Manifest:
+    def load_yml(cls, path: Path, origin: str | None = None) -> Manifest:
         raw = path.read_text()
         data = yaml.safe_load(raw)
 
@@ -144,7 +166,7 @@ class Manifest:
         module = module_from_spec(module_spec)
         module.__file__ = str(path)
         sys.modules[module.__name__] = module
-        manifest = Manifest(path)
+        manifest = Manifest(path, origin=origin)
 
         # Apps
         for app_name, app_raw in apps_raw.items():
@@ -187,6 +209,11 @@ class Manifest:
             )
 
         return manifest
+
+    def get_lockfile_path(self) -> Path:
+        if settings.LOCKFILE:
+            return settings.LOCKFILE
+        return self.path.with_suffix(LOCKFILE_SUFFIX)
 
     def init_host(self) -> Host:
         """

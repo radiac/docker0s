@@ -1,5 +1,5 @@
 """
-Test the conftest fixtures
+Test the conftest fixtures to confirm they work as expected
 """
 from docker0s import git
 

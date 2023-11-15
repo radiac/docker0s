@@ -7,8 +7,15 @@ Commands
 
 Docker0s installs as ``docker0s`` and ``d0s`` for short
 
+Manifest commands
+-----------------
+
 ``docker0s ls``
-  List the available apps
+  List the available apps in this host manifest
+
+
+Host commands
+-------------
 
 ``docker0s deploy [<app>[.<service>]]``:
   Deploy resources to the host
@@ -34,14 +41,30 @@ Docker0s installs as ``docker0s`` and ``d0s`` for short
 ``docker0s cmd <app> <command> [<args> ...]``
   Execute a local App command
 
+
+Settings and cache
+------------------
+
+``docker0s cache status``
+  Show cache status
+
+``docker0s cache flush``
+  Clear the cache
+
 ``docker0s use [<file|alias>] [--alias=<alias>]``
   Set or unset the default host manifest, by either file path or an alias.
 
 ``docker0s use --list``
   List aliases.
 
+``docker0s set [<setting> [<value>]]``
+  Check, set, or unset a stored config setting
 
-Options:
+
+Options
+-------
+
+All commands take the following options
 
 ``--config=<file>``, ``-c <file>``:
   Specify the config file to use. Defaults to the ``docker0s/config.json`` in the app
@@ -55,9 +78,10 @@ Options:
   Turn on or off debug messages.
 
 
-Environment variables:
+Environment variables
+---------------------
 
-``DOCKER0S_CONFIG=<file>``
+``DOCKER0S_CONFIG_PATH=<file>``
   Specify the config file to use. See ``--config`` option for defaults.
 
 ``DOCKER0S_MANIFEST=<file>``
@@ -68,6 +92,18 @@ Environment variables:
   Enable debug messages by setting this to ``true``. If debugging is turned on in the
   config file, you can turn it off again by setting this to ``false``, ``no`` or
   ``off``.
+
+``DOCKER0S_CACHE_ENABLED=true``
+  Enable caching. See ``--cache`` option for details.
+
+``DOCKER0S_CACHE_PATH=<dir>``
+  Specify the cache dir path. See ``--cache-dir`` option for defaults.
+
+``DOCKER0S_CACHE_AGE=<seconds>``
+  Number of seconds before the cache should be invalidated. Only takes effect if
+  ``DOCKER0S_CACHE_ENABLED=True`` - see ``--cache`` option for details.
+
+  Default: 60 (no cache)
 
 .. note::
 

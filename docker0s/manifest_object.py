@@ -57,6 +57,7 @@ class ManifestObject:
             module: Name of module
             data:   App attributes
         """
+
         # No type checking here - see https://github.com/python/mypy/issues/9183 and
         # https://github.com/python/mypy/issues/5865
         class FromDict(cls, name=name, path=path):  # type: ignore

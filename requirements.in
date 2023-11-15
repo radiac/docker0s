@@ -3,6 +3,7 @@ pip-tools
 click
 fabric
 jinja2
+platformdirs
 python-dotenv
 pyyaml
 rich

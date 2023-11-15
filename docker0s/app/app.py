@@ -17,7 +17,7 @@ class App(BaseApp, abstract=True):
         super().deploy()
         self.push_assets_to_host()
 
-    def push_assets_to_host(self):
+    def push_assets_to_host(self) -> None:
         cls_assets = self.collect_attr("assets")
         files: str | list[str]
         for mro_cls, files in cls_assets:

@@ -2,19 +2,22 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path, PosixPath
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from ..config import REMOTE_ASSETS, REMOTE_COMPOSE, REMOTE_ENV
 from ..env import dump_env, read_env
 from ..exceptions import DefinitionError
 from ..host import Host
+from ..lock import AppLock
 from ..manifest_object import ManifestObject
 from ..path import ExtendsPath
 from ..reporter import reporter
-from ..settings import DIR_ASSETS, FILENAME_COMPOSE, FILENAME_ENV
 from .names import normalise_name, pascal_to_snake
 
+if TYPE_CHECKING:
+    from ..manifest import Manifest
 
 # Abstract app registry for type lookups
 abstract_app_registry: dict[str, type[BaseApp]] = {}
@@ -73,6 +76,8 @@ class EnvTemplateContext:
 
 
 class BaseApp(ManifestObject, abstract=True):
+    #: Manifest this is defined in
+    manifest: Any  # get_type_hints complains if this is Manifest
     _file: Path  # Path to this manifest file
     _dir: Path  # Path to this manifest file
 
@@ -86,8 +91,6 @@ class BaseApp(ManifestObject, abstract=True):
     #:
     #: This referenced manifest will will act as the base manifest. That in turn can
     #: reference an additional base manifest.
-    #:
-    #: Default: ``d0s-manifest.py``, then ``d0s-manifest.yml``
     extends: str | None = None
     _extends_path: ExtendsPath | None = None  # Resolved path
 
@@ -97,7 +100,7 @@ class BaseApp(ManifestObject, abstract=True):
     #:
     #: For access see ``.get_compose_path``
     #:
-    #: Default: ``docker-compose.jinja2``, then ``docker-compose.yml``
+    #: Default: ``docker-compose.jinja2``, then ``docker-compose.yml``, ``compose.yml``
     compose: str | None = None
 
     COMPOSE_DEFAULTS = [
@@ -105,6 +108,8 @@ class BaseApp(ManifestObject, abstract=True):
         "docker-compose.jinja2",
         "docker-compose.yml",
         "docker-compose.yaml",
+        "compose.yml",
+        "compose.yaml",
     ]
 
     #: Context for docker-compose Jinja2 template rendering
@@ -189,12 +194,15 @@ class BaseApp(ManifestObject, abstract=True):
         return pascal_to_snake(cls.get_name())
 
     @classmethod
-    def apply_base_manifest(cls, history: list[Path] | None = None):
+    def apply_base_manifest(cls, *, lock: AppLock, history: list[Path] | None = None):
         """
         If a base manifest can be found by _get_base_manifest, load it and look for a
         BaseApp subclass with the same name as this. If found, add it to the base
         classes for this class.
         """
+
+        # TODO: Add lockfile check here
+
         # Avoid import loop
         from ..manifest import Manifest
 
@@ -206,11 +214,13 @@ class BaseApp(ManifestObject, abstract=True):
         ) or cls.get_name()
         with reporter.task(f"Getting base manifest for {base_name} from {cls.extends}"):
             if not cls._extends_path:
-                cls._extends_path = ExtendsPath(cls.extends, cls._dir)
+                cls._extends_path = ExtendsPath(cls.extends, cls._dir, lock=lock)
 
             path = cls._extends_path.get_manifest()
 
-        base_manifest = Manifest.load(path, history, label=base_name)
+        base_manifest = Manifest.load(
+            path, history, label=base_name, origin=cls.extends
+        )
         if base_manifest.host is not None:
             raise DefinitionError("A base manifest cannot define a host")
 
@@ -305,6 +315,8 @@ class BaseApp(ManifestObject, abstract=True):
         #    it would be a big deal early on, but it seems to be an edge case in the
         #    real world - very few projects have needed custom deployment steps, and I
         #    suspect those could all be handled by actual importing and subclassing.
+        #
+        # Look at this at the same time as the inheritance changes in Workers
         results: list[tuple[type[BaseApp], Any]] = []
         for mro_cls in cls.mro():
             if not issubclass(mro_cls, BaseApp) or mro_cls.abstract:
@@ -381,14 +393,14 @@ class BaseApp(ManifestObject, abstract=True):
         """
         A PosixPath to the remote compose file
         """
-        return self.remote_path / FILENAME_COMPOSE
+        return self.remote_path / REMOTE_COMPOSE
 
     @property
     def remote_env(self) -> PosixPath:
         """
         A PosixPath for the remote env file
         """
-        return self.remote_path / FILENAME_ENV
+        return self.remote_path / REMOTE_ENV
 
     @property
     def remote_assets(self) -> PosixPath:
@@ -398,7 +410,7 @@ class BaseApp(ManifestObject, abstract=True):
         Assets are resources pushed to the server as part of the docker0s deployment -
         config files, scripts, media etc
         """
-        return self.remote_path / DIR_ASSETS
+        return self.remote_path / REMOTE_ASSETS
 
     @property
     def remote_store(self) -> PosixPath:
@@ -484,7 +496,7 @@ class BaseApp(ManifestObject, abstract=True):
         self.write_env_to_host()
         self.host.ensure_parent_path(self.remote_store)
 
-    def push_compose_to_host(self):
+    def push_compose_to_host(self) -> None:
         compose_content: str = self.get_compose_content()
         compose_remote: PosixPath = self.remote_compose
         self.host.write(compose_remote, compose_content)

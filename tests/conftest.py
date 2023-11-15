@@ -13,7 +13,9 @@ from fabric.runners import Result
 
 from docker0s import git
 from docker0s import host as docker0s_host
+from docker0s.config import settings
 from docker0s.host import Host
+from docker0s.lockfile import AppLock
 from docker0s.manifest import Manifest
 
 from .constants import GITHUB_EXISTS_CONTENT, GITHUB_EXISTS_PARTS, HOST_NAME
@@ -82,7 +84,7 @@ def assert_no_calls(mock_call):
 
 @pytest.fixture
 def cache_path(tmp_path: Path, monkeypatch) -> Path:
-    monkeypatch.setattr(git, "CACHE_PATH", tmp_path)
+    monkeypatch.setattr(settings, "CACHE_PATH", tmp_path)
     return tmp_path
 
 
@@ -95,6 +97,11 @@ def mock_file(cache_path):
     file_path.write_text(GITHUB_EXISTS_CONTENT)
 
     return (url, ref, path, file_path)
+
+
+@pytest.fixture
+def mock_lock(cache_path):
+    return AppLock(name="MockApp")
 
 
 @pytest.fixture

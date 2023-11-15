@@ -62,13 +62,39 @@ Put together a manifest in YAML as ``d0s-manifest.yml``:
         type: RepoApp
         extends: "git+ssh://git@github.com:radiac/example.com.git@main"
         env:
-          DOMAIN: example.radiac.net
+          DOMAIN: docker0s.example.com
     host:
-      name: example.radiac.net
+      name: docker0s.example.com
+
+See `writing manifests`_ for a full reference
+
+.. _writing manifests: https://docker0s.readthedocs.io/en/latest/writing/index.html
 
 
-or in Python as ``d0s-manifest.py``, using subclassing to perform actions before and
-after operations and add custom functionality:
+Then deploy your code and bring up the containers::
+
+    d0s deploy
+    d0s up
+
+You can then use docker0s to manage your deployment::
+
+    # Restart a container
+    d0s restart website.django
+
+    # Run a command inside a container
+    d0s exec website.django /bin/bash
+
+See `commands`_ for a full command reference
+
+.. _commands: https://docker0s.readthedocs.io/en/latest/usage.html
+
+
+Python power
+============
+
+You can also write your manifests in Python as ``d0s-manifest.py``, using subclassing to
+perform actions before and after operations, and to extend docker0s with custom
+commands:
 
 .. code-block:: python
 
@@ -78,7 +104,7 @@ after operations and add custom functionality:
         # Clone a repo to the host and look for docker-compose.yml in there
         extends = "git+ssh://git@github.com:radiac/example.com.git@main"
         env = {
-            "DOMAIN": "example.radiac.net"
+            "DOMAIN": "docker0s.example.com"
         }
 
         # Subclass operation methods to add your own logic
@@ -87,22 +113,14 @@ after operations and add custom functionality:
             super().deploy()
             # Perform action after deployment, eg push additional resources
 
-    class Vagrant(Host):
-        name = "vagrant"
+        @App.command
+        def say_hello(self, name):
+            print(f"Hello {name}, this runs locally")
+            self.host.exec("echo And {name}, this is on the host", args={'name': name})
 
-See `writing manifests`_ for a full reference
+    class MyServer(Host):
+        name = "myserver.example.com"
 
-.. _writing manifests: https://docker0s.readthedocs.io/en/latest/writing/index.html
+The command is then available as::
 
-
-Then run a command, eg::
-
-    d0s deploy
-    d0s up
-    d0s restart website.django
-    d0s exec website.django /bin/bash
-    d0s cmd website app_command arguments
-
-See `commands`_ for a full command reference
-
-.. _commands: https://docker0s.readthedocs.io/en/latest/usage.html
+    d0s website:hello

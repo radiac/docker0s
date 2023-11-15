@@ -44,7 +44,7 @@ def test_baseapp__manifest_dir_dectected():
     assert TestApp._dir == Path(__file__).parent
 
 
-def test_apply_base_manifest__no_extends__no_base_loaded(monkeypatch):
+def test_apply_base_manifest__no_extends__no_base_loaded(monkeypatch, mock_lock):
     class TestApp(BaseApp):
         pass
 
@@ -52,11 +52,11 @@ def test_apply_base_manifest__no_extends__no_base_loaded(monkeypatch):
     mock_get_manifest = Mock()
     monkeypatch.setattr("docker0s.path.ExtendsPath.get_manifest", mock_get_manifest)
 
-    TestApp.apply_base_manifest()
+    TestApp.apply_base_manifest(lock=mock_lock)
     mock_get_manifest.assert_not_called()
 
 
-def test_apply_base_manifest__extends__merges_base_classes(tmp_path):
+def test_apply_base_manifest__extends__merges_base_classes(tmp_path, mock_lock):
     """
     TestApp extends first.py::TestApp, which extends second.py::TestApp
     """
@@ -71,7 +71,7 @@ def test_apply_base_manifest__extends__merges_base_classes(tmp_path):
         TestApp._dir,
         (TestApp._dir / "../data/extends_base_first.py").resolve(),
     )
-    TestApp.apply_base_manifest()
+    TestApp.apply_base_manifest(lock=mock_lock)
 
     # Should have first as the first base
     assert len(TestApp.__bases__) == 2

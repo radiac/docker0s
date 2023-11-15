@@ -3,7 +3,6 @@ GitHub helpers
 """
 from __future__ import annotations
 
-import hashlib
 import re
 import shlex
 import subprocess
@@ -11,9 +10,8 @@ from functools import lru_cache
 from pathlib import Path, PosixPath
 from typing import TYPE_CHECKING
 
+from .config import settings
 from .exceptions import DefinitionError, ExecutionError
-from .reporter import reporter
-from .settings import CACHE_PATH
 
 
 if TYPE_CHECKING:
@@ -70,16 +68,15 @@ def call(
     cwd: Path | None = None,
 ) -> subprocess.CompletedProcess:
     # This specific invocation will allow git to use the system's ssh agent
-    with reporter.interactive():
-        result = subprocess.run(
-            shlex.join(cmd),
-            cwd=cwd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            shell=True,
-            start_new_session=True,
-        )
+    result = subprocess.run(
+        shlex.join(cmd),
+        cwd=cwd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        shell=True,
+        start_new_session=True,
+    )
     return result
 
 
@@ -142,10 +139,18 @@ def _parse_remote_show_to_head(raw: str) -> str:
 
 
 @lru_cache()
-def fetch_repo(url: str, ref: str | None) -> Path:
-    # Build repo path
-    repo_dir = hashlib.md5(url.encode()).hexdigest()
-    repo_path = CACHE_PATH / repo_dir
+def fetch_repo(
+    url: str,
+    ref: str | None,
+) -> Path:
+    # Get cache object
+    cache_state = settings.get_cache_state()
+    cache = cache_state.get_or_create(url)
+    repo_path = cache.path
+
+    # Check cache
+    if cache.is_cached:
+        return repo_path
 
     # Clone
     if not repo_path.exists():
@@ -171,6 +176,8 @@ def fetch_repo(url: str, ref: str | None) -> Path:
     if result.returncode == 0:
         # It is a branch, use reset to get to head
         call_or_die("git", "reset", "--hard", f"origin/{ref}", cwd=repo_path)
+
+    cache_state.update(url)
 
     return repo_path
 

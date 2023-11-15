@@ -40,6 +40,8 @@ pep517==0.13.0
     # via build
 pip-tools==6.8.0
     # via -r requirements.in
+platformdirs==3.11.0
+    # via -r requirements.in
 pycparser==2.21
     # via cffi
 pygments==2.16.1

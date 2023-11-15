@@ -5,15 +5,37 @@ Changelog
 Changes
 =======
 
-2.1.0 -
+3.0.0 -
 ------------------
 
 Features:
 
+* Add progress reporting, logging, and report pretty-printing
+* Add threads for parallel manifest loading
+* Opt-in cache persistence across calls with new settings, see docs
+* Add ``cache`` command to manage cache
+* Add ``ls -l`` command option to show app inheritance
+* Merge config and settings - some env vars have been renamed, see upgrade notes
 * Merge ``compose_context`` from base apps so that newest key wins, rather than
   overwriting all keys.
-* Add progress reporting, logging, and report pretty-printing
-* Add thread pool for parallel manifest loading
+
+
+Upgrading
+~~~~~~~~~
+
+#.  The following environment variables have been removed:
+
+    * ``DOCKER0S_PATH`` is now removed
+    * ``DOCKER0S_ENV_FILENAME``
+    * ``DOCKER0S_COMPOSE_FILENAME``
+    * ``DOCKER0S_DIR_ASSETS``
+
+    A saved config file will automatically migrate to the new variables.
+
+#. The cache dir has been moved; you can delete the ``~/.docker0s`` dir and its
+   contents. We now use platformdirs to determine the correct place to store the
+   cache (on linux that's ``~/.cache/docker0s``)
+
 
 
 2.0.0 - 2022-01-10
